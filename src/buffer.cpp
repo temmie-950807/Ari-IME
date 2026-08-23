@@ -23,7 +23,7 @@ constexpr int kPunctuationCandidateDown = -2;
 // Opens template mode from an empty pre-edit. Not a setting: the entry
 // condition already keeps a mid-sentence backtick literal, and forced English
 // never reaches the core at all, so the collision surface is close to nil.
-constexpr fcitx::KeySym kTemplatePrefixKey = '`';
+constexpr char kTemplatePrefixKey = '`';
 
 // Numeric-keypad keys (NumLock on) arrive as KP_* keysyms instead of the ASCII
 // sym of the equivalent main-row key. Map them back to ASCII so they flow
@@ -1085,7 +1085,7 @@ KeyResult Buffer::handleAuto(const fcitx::Key &key) {
         return insertPunctuation(sym == FcitxKey_bracketleft ? "「" : "」");
     }
 
-    if (sym == kTemplatePrefixKey && !forcedEnglish_ && preeditText().empty()) {
+    if (sym == static_cast<fcitx::KeySym>(kTemplatePrefixKey) && !forcedEnglish_ && preeditText().empty()) {
         templateMode_ = true;
         templateCode_.clear();
         // Entering the mode is a deliberate act, not a hot path, so this is
@@ -2452,7 +2452,7 @@ KeyResult Buffer::leaveTemplateMode(bool emitPrefixKey) {
     }
     // Pressing the prefix key again is the way out that also types the
     // character, so a backtick remains reachable without switching modes.
-    return handleChar(static_cast<char>(kTemplatePrefixKey));
+    return handleChar(kTemplatePrefixKey);
 }
 
 KeyResult Buffer::pickTemplate(int pageIndex) {
@@ -2474,7 +2474,7 @@ KeyResult Buffer::handleTemplate(const fcitx::Key &key, fcitx::KeySym sym) {
         return {false, false, {}, false}; // let the application have its chords
     }
 
-    if (sym == kTemplatePrefixKey) {
+    if (sym == static_cast<fcitx::KeySym>(kTemplatePrefixKey)) {
         return leaveTemplateMode(/*emitPrefixKey=*/true);
     }
     // Escape must be handled here: the shared path resets the whole pre-edit,
