@@ -401,6 +401,25 @@ int main(int argc, char **argv) {
         assert(!std::filesystem::exists(ari_ime::longPhrasesPath()));
     }
 
+    // The four tone marks libchewing emits, and the separator a multi-character
+    // reading needs. Getting this wrong rejects every imported phrase: the
+    // fourth tone and the neutral tone alone cover most of a real dictionary.
+    {
+        // 查看 (fourth), 應該 (first, unmarked), 式子 (neutral)
+        assert(ari_ime::isCanonicalReadingForTesting("ㄔㄚˊ ㄎㄢˋ"));
+        assert(ari_ime::isCanonicalReadingForTesting("ㄧㄥ ㄍㄞ"));
+        assert(ari_ime::isCanonicalReadingForTesting("ㄕˋ ㄗ˙"));
+        assert(ari_ime::isCanonicalReadingForTesting("ㄋㄧˇ"));
+
+        assert(!ari_ime::isCanonicalReadingForTesting(""));
+        assert(!ari_ime::isCanonicalReadingForTesting(" ㄋㄧˇ"));
+        assert(!ari_ime::isCanonicalReadingForTesting("ㄋㄧˇ "));
+        assert(!ari_ime::isCanonicalReadingForTesting("ㄋㄧˇ  ㄏㄠˇ"));
+        // A middle dot is not the neutral tone mark, however similar it looks.
+        assert(!ari_ime::isCanonicalReadingForTesting("ㄕˋ ㄗ·"));
+        assert(!ari_ime::isCanonicalReadingForTesting("nihao"));
+    }
+
     std::puts("core smoke test passed");
     return 0;
 }

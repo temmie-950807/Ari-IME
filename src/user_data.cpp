@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
+#include "unicode.h"
 #include "user_data.h"
 
 #include <algorithm>
@@ -262,6 +263,46 @@ std::vector<LongPhrase> loadLongPhrases() {
         out.push_back(std::move(entry));
     }
     return out;
+}
+
+bool isCanonicalReadingForTesting(const std::string &reading) {
+    if (reading.empty()) {
+        return false;
+    }
+    std::size_t offset = 0;
+    bool syllableStart = true;
+    while (offset < reading.size()) {
+        const ari_ime::unicode::CodePoint cp =
+            ari_ime::unicode::decode(reading, offset);
+        if (!cp.valid) {
+            return false;
+        }
+        // libchewing separates the syllables of a multi-character phrase with a
+        // single space, so a reading for 你好 reads "ㄋㄧˇ ㄏㄠˇ". Rejecting the
+        // separator would limit imports to single characters.
+        if (cp.value == ' ') {
+            if (syllableStart) {
+                return false; // leading or doubled separator
+            }
+            syllableStart = true;
+            offset += cp.length;
+            continue;
+        }
+        const bool letter = cp.value >= 0x3105 && cp.value <= 0x3129;
+        // The four marks libchewing itself emits; first tone carries none.
+        // These are the modifier letters, not their lookalikes: a middle dot or
+        // a macron would be rejected by chewing_userphrase_add() anyway.
+        const bool tone = cp.value == 0x02CA || // ˊ second
+                          cp.value == 0x02C7 || // ˇ third
+                          cp.value == 0x02CB || // ˋ fourth
+                          cp.value == 0x02D9;   // ˙ neutral
+        if (!letter && !tone) {
+            return false;
+        }
+        syllableStart = false;
+        offset += cp.length;
+    }
+    return !syllableStart; // a trailing separator leaves an empty syllable
 }
 
 bool saveLongPhrases(const std::vector<LongPhrase> &phrases) {

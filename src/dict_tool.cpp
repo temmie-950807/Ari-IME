@@ -70,28 +70,6 @@ bool hasTabOrNewline(std::string_view value) {
 // the tone marks the format uses. Layout keys such as "su3", ASCII, and
 // punctuation fail here with a per-line error before anything touches the
 // dictionary; libchewing's own rejection stays as a belt-and-braces branch.
-bool isCanonicalReading(const std::string &reading) {
-    if (reading.empty()) {
-        return false;
-    }
-    std::size_t offset = 0;
-    while (offset < reading.size()) {
-        const ari_ime::unicode::CodePoint cp =
-            ari_ime::unicode::decode(reading, offset);
-        if (!cp.valid) {
-            return false;
-        }
-        const bool letter = cp.value >= 0x3105 && cp.value <= 0x3129;
-        const bool tone =
-            cp.value == 0x02C7 || cp.value == 0x02C9 || cp.value == 0x02CA ||
-            cp.value == 0x02CC || cp.value == 0x02D7 || cp.value == 0x00B7;
-        if (!letter && !tone) {
-            return false;
-        }
-        offset += cp.length;
-    }
-    return true;
-}
 
 bool readEntries(std::istream &in, std::vector<Entry> &entries,
                  std::string &error) {
@@ -143,7 +121,7 @@ bool readEntries(std::istream &in, std::vector<Entry> &entries,
                     std::to_string(lineNumber);
             return false;
         }
-        if (!isCanonicalReading(reading)) {
+        if (!ari_ime::isCanonicalReadingForTesting(reading)) {
             error = "reading must be canonical Bopomofo (for example ㄋㄧˇ), "
                     "got \"" +
                     reading + "\" on line " + std::to_string(lineNumber);

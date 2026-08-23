@@ -124,6 +124,12 @@ inline constexpr int kLongPhraseMaxChars = 30;
 // are untouched.
 bool resetUserDictionary(std::error_code &ec);
 
+// Whether a reading is spelled the way libchewing emits it: Bopomofo letters
+// with an optional tone mark, syllables separated by single spaces. Shared with
+// the import path in dict_tool.cpp, which must reject anything else before
+// chewing_userphrase_add() drops it without an error.
+bool isCanonicalReadingForTesting(const std::string &reading);
+
 } // namespace ari_ime
 
 #endif // ARI_IME_USER_DATA_H
