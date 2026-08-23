@@ -232,6 +232,11 @@ Zhuyin::~Zhuyin() {
 void Zhuyin::resetAll() {
     if (ctx_) {
         chewing_Reset(ctx_);
+        // libchewing 0.8's chewing_Reset() memsets its whole state, taking the
+        // keyboard type down to KB_DEFAULT with it. Every reset would otherwise
+        // silently move a 許氏 or Dvorak user back onto the 大千 key map
+        // mid-composition. Harmless where the library keeps the value.
+        chewing_set_KBType(ctx_, inputer::chewingKeyboardType(layout_));
 #ifdef INPUTER_LIBCHEWING_LEGACY_OUTPUT
         // libchewing 0.6 resets the editor state but leaves its compatibility
         // display buffer populated until Esc is handled explicitly.
@@ -530,11 +535,79 @@ int Zhuyin::addUserPhrase(const std::string &phrase,
     return result;
 }
 
-bool Zhuyin::rememberPreferredPhrase(const std::string &phrase) {
+std::string Zhuyin::bopomofoForKeys(const std::string &keys) {
+    if (!ctx_ || keys.empty()) {
+        return {};
+    }
+    // Buffer marks tone one with a trailing space; the other tones end in the
+    // layout's tone key.
+    std::string body = keys;
+    char tone = 0;
+    if (inputer::isToneKey(body.back()) || body.back() == ' ') {
+        tone = body.back();
+        body.pop_back();
+    }
+    if (body.empty()) {
+        return {};
+    }
+
+    // libchewing exposes the syllable being composed, but consumes it the
+    // moment a tone completes the character. So read the body first, then ask
+    // for the tone mark on its own — a lone tone key reports just its mark, and
+    // tone one reports nothing, which is exactly the canonical spelling.
+    // resetAll() rather than a bare chewing_Reset(): on libchewing 0.8 a plain
+    // reset leaves the compatibility display buffer populated, and the syllable
+    // read back below would be whatever was there before.
+    const auto compose = [this](const std::string &input) -> std::string {
+        resetAll();
+        for (const unsigned char key : input) {
+            chewing_handle_Default(ctx_, key);
+        }
+        const char *bopomofo = chewing_bopomofo_String_static(ctx_);
+        return bopomofo ? bopomofo : "";
+    };
+
+    const std::string head = compose(body);
+    std::string mark;
+    if (!head.empty() && tone != 0 && tone != ' ') {
+        mark = compose(std::string(1, tone));
+    }
+    resetAll();
+    return head.empty() ? std::string{} : head + mark;
+}
+
+bool Zhuyin::rememberPreferredPhrase(const std::string &phrase,
+                                     const std::vector<std::string> &readings) {
     if (!ctx_ || !inputer::autoLearnEnabled() ||
         !validPreferencePhrase(phrase)) {
         return false;
     }
+
+    // Record the choice in libchewing's own user dictionary, not just in the
+    // sidecar. loadUserPhraseCache() intersects the two stores before anything
+    // may be promoted, so a sidecar entry with no counterpart there can never
+    // take effect — and libchewing's auto-learn does not necessarily create one
+    // for a single deliberate pick. Falls through to the sidecar-only path when
+    // the readings cannot be spelled out.
+    if (!readings.empty() && readings.size() == inputer::unicode::splitGraphemes(phrase).size()) {
+        std::string bopomofo;
+        for (const std::string &reading : readings) {
+            const std::string syllable = bopomofoForKeys(reading);
+            if (syllable.empty()) {
+                bopomofo.clear();
+                break;
+            }
+            if (!bopomofo.empty()) {
+                bopomofo += ' ';
+            }
+            bopomofo += syllable;
+        }
+        const int added = bopomofo.empty() ? -1 : addUserPhrase(phrase, bopomofo);
+        if (added >= 0) {
+            return true;
+        }
+    }
+
     loadUserPhraseCache();
     if (userPhraseTexts_.find(phrase) != userPhraseTexts_.end()) {
         userPhraseMappings_.insert(phrase);

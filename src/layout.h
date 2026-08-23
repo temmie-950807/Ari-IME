@@ -40,10 +40,11 @@ enum class ChinesePunctuationShortcut {
     AltShift,
     Control,
     Alt,
+    Shift,
     Disabled,
 };
 FCITX_CONFIG_ENUM_NAME(ChinesePunctuationShortcut, "ControlShift", "AltShift",
-                       "Control", "Alt", "Disabled");
+                       "Control", "Alt", "Shift", "Disabled");
 
 struct SyllableKeySequence {
     std::string keys;
@@ -76,7 +77,8 @@ struct ChinesePunctuationShortcutI18NAnnotation {
         config.setValueByPath("EnumI18n/1", _("Alt+Shift"));
         config.setValueByPath("EnumI18n/2", _("Ctrl"));
         config.setValueByPath("EnumI18n/3", _("Alt"));
-        config.setValueByPath("EnumI18n/4", _("停用"));
+        config.setValueByPath("EnumI18n/4", _("Shift"));
+        config.setValueByPath("EnumI18n/5", _("停用"));
     }
 };
 

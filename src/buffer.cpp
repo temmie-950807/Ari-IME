@@ -14,10 +14,16 @@
 #include "constants.h"
 #include "layout.h"
 #include "unicode.h"
+#include "user_data.h"
 
 namespace {
 
 constexpr int kPunctuationCandidateDown = -2;
+
+// Opens template mode from an empty pre-edit. Not a setting: the entry
+// condition already keeps a mid-sentence backtick literal, and forced English
+// never reaches the core at all, so the collision surface is close to nil.
+constexpr fcitx::KeySym kTemplatePrefixKey = '`';
 
 // Numeric-keypad keys (NumLock on) arrive as KP_* keysyms instead of the ASCII
 // sym of the equivalent main-row key. Map them back to ASCII so they flow
@@ -237,6 +243,11 @@ bool punctuationShortcutActive(
         return ctrl;
     case inputer::ChinesePunctuationShortcut::Alt:
         return alt;
+    // Shift alone reaches the Chinese forms without a chord, at the cost of
+    // the shifted ASCII symbols that have a full-width counterpart: Shift+,
+    // gives ，rather than <. Symbols with no Chinese form are unaffected.
+    case inputer::ChinesePunctuationShortcut::Shift:
+        return shifted && !ctrl && !alt;
     case inputer::ChinesePunctuationShortcut::Disabled:
         return false;
     }
@@ -324,6 +335,15 @@ std::string chinesePunct(char c) {
     case '_': return "＿";
     case '`': return "｀";
     case '"': return "＂";
+    // libchewing maps the shifted bracket to 『』. Both halves of the key give
+    // the corner quote instead: it is the ordinary Chinese quotation mark, and
+    // Shift is already spent reaching `[` on most layouts, so leaving 「」 to
+    // the unshifted half alone would put the common form out of reach of the
+    // punctuation shortcut. 『』 stays available through the candidate list.
+    case '[':
+    case '{': return "「";
+    case ']':
+    case '}': return "」";
     default: break;
     }
     // Intentionally leaked, like the syllable probes above.
@@ -361,6 +381,23 @@ std::string chinesePunctShortcut(char c) {
     case '-': return "－";
     default: return chinesePunct(c);
     }
+}
+
+// Paired punctuation: typing the opening half also parks its closing half after
+// the caret, so the text can be typed straight through without stepping over
+// it. Only symmetric Chinese pairs are listed — half-width brackets are used
+// freely in code and paths, where auto-pairing gets in the way.
+std::string closingPunctuationFor(const std::string &opening) {
+    static const std::vector<std::pair<std::string, std::string>> kPairs{
+        {"「", "」"}, {"『", "』"}, {"（", "）"}, {"【", "】"},
+        {"〈", "〉"}, {"《", "》"}, {"〔", "〕"}, {"﹁", "﹂"},
+        {"﹃", "﹄"}};
+    for (const auto &[open, close] : kPairs) {
+        if (opening == open) {
+            return close;
+        }
+    }
+    return {};
 }
 
 std::string punctuationForShortcutEvent(
@@ -576,6 +613,8 @@ bool hasAsciiDigit(const std::string &s) {
 
 void Buffer::reset() {
     token_ = Token::Chinese;
+    templateMode_ = false;
+    templateCode_.clear();
     cells_.clear();
     tail_.clear();
     runReadings_.clear();
@@ -662,7 +701,35 @@ void Buffer::freezeAll() {
 // Display accessors
 // ---------------------------------------------------------------------------
 
+bool Buffer::isSettledEnglish() const {
+    if (selecting_ || token_ != Token::English) {
+        return false;
+    }
+    // A pending syllable or a live chewing run means Chinese is still possible.
+    if (!syl_.empty() || !zhuyin_.preedit().empty() || englishBuf_.empty()) {
+        return false;
+    }
+    for (const Cell &c : cells_) {
+        if (c.chinese) {
+            return false;
+        }
+    }
+    for (const Cell &c : tail_) {
+        if (c.chinese) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::string Buffer::preeditText() const {
+    // In template mode the pre-edit is the code being typed, labelled so the
+    // mode is visible without a separate status line. The front end must not
+    // commit this text — see isTemplateMode().
+    if (templateMode_) {
+        return "\u3010\u6587\u5b57\u7bc4\u672c\u3011" + templateCode_;
+    }
+
     std::string out;
     for (const Cell &c : cells_) {
         out += c.text;
@@ -791,7 +858,10 @@ std::vector<std::string> Buffer::previewCandidates() {
 }
 
 KeyResult Buffer::selectCandidate(int pageIndex) {
-    if (!selecting_ || !candOpen_) {
+    if (templateMode_) {
+        return pickTemplate(pageIndex);
+    }
+    if (!candidateWindowOpen()) {
         return {false, false, {}, false};
     }
     if (pageIndex < 0 || pageIndex >= visibleCandidateCount()) {
@@ -802,7 +872,10 @@ KeyResult Buffer::selectCandidate(int pageIndex) {
 
 KeyResult Buffer::selectCandidate(int pageIndex,
                                   const std::string &expectedText) {
-    if (!selecting_ || !candOpen_) {
+    if (templateMode_) {
+        return pickTemplate(pageIndex);
+    }
+    if (!candidateWindowOpen()) {
         return {false, false, {}, false};
     }
     if (pageIndex < 0 || pageIndex >= visibleCandidateCount()) {
@@ -819,11 +892,11 @@ KeyResult Buffer::selectCandidate(int pageIndex,
 }
 
 int Buffer::candidatePage() const {
-    return (!selecting_ || !candOpen_ || selCands_.empty()) ? 0 : selPage_ + 1;
+    return !candidateWindowOpen() || selCands_.empty() ? 0 : selPage_ + 1;
 }
 
 int Buffer::candidatePageCount() const {
-    if (!selecting_ || !candOpen_ || selCands_.empty()) {
+    if (!candidateWindowOpen() || selCands_.empty()) {
         return 0;
     }
     return (static_cast<int>(selCands_.size()) + inputer::kCandPerPage - 1) /
@@ -893,6 +966,8 @@ KeyResult Buffer::handleKey(const fcitx::Key &key) {
             exitSelection();
         }
         freezeAll();
+        templateMode_ = false;
+        templateCode_.clear();
         forcedEnglish_ = !forcedEnglish_;
         return {true, false, {}, true, /*notifyMode=*/true};
     }
@@ -902,6 +977,12 @@ KeyResult Buffer::handleKey(const fcitx::Key &key) {
 
 KeyResult Buffer::handleAuto(const fcitx::Key &key) {
     auto sym = normalizeKeySym(key.sym());
+
+    // The template mode is self-contained: it collects a raw code and never
+    // reaches the 注音 parser below.
+    if (templateMode_) {
+        return handleTemplate(key, sym);
+    }
 
     const bool ctrlOnly = key.states().test(fcitx::KeyState::Ctrl) &&
                           !key.states().testAny(fcitx::KeyStates{
@@ -944,10 +1025,18 @@ KeyResult Buffer::handleAuto(const fcitx::Key &key) {
     }
 
     if (altCornerQuote) {
-        clearSelectionUndo();
-        freezeAll();
-        cells_.push_back(
-            {false, sym == FcitxKey_bracketleft ? "「" : "」", {}});
+        return insertPunctuation(sym == FcitxKey_bracketleft ? "「" : "」");
+    }
+
+    if (sym == kTemplatePrefixKey && !forcedEnglish_ && preeditText().empty()) {
+        templateMode_ = true;
+        templateCode_.clear();
+        // Entering the mode is a deliberate act, not a hot path, so this is
+        // where the file is re-read. Doing it here rather than in a front end
+        // means an edit takes effect on every platform without each one having
+        // to remember to ask.
+        inputer::templateStore().reload();
+        loadTemplateCandidates();
         return {true, false, {}, true};
     }
 
@@ -968,10 +1057,7 @@ KeyResult Buffer::handleAuto(const fcitx::Key &key) {
         sym >= 33 && sym <= 126) {
         std::string punct = chinesePunctShortcut(static_cast<char>(sym));
         if (!punct.empty()) {
-            clearSelectionUndo();
-            freezeAll();
-            cells_.push_back({false, punct, {}});
-            return {true, false, {}, true};
+            return insertPunctuation(punct);
         }
     }
 
@@ -1054,9 +1140,9 @@ KeyResult Buffer::handleChar(char c, bool literal) {
             if (!punct.empty()) {
                 freezeRun();
                 freezeEnglish();
-                cells_.push_back({false, punct, {}});
+                const KeyResult placed = placePunctuation(punct);
                 token_ = Token::Chinese;
-                return {true, false, {}, true};
+                return placed;
             }
         }
         // English→Chinese transition without a delimiter: only a tone key, by
@@ -1080,8 +1166,7 @@ KeyResult Buffer::handleChar(char c, bool literal) {
         std::string punct = chinesePunct(c);
         if (fullWidthPunct_ && !punct.empty()) {
             freezeAll();
-            cells_.push_back({false, punct, {}});
-            return {true, false, {}, true};
+            return placePunctuation(punct);
         }
         return handleLiteralChar(c);
     }
@@ -1089,6 +1174,14 @@ KeyResult Buffer::handleChar(char c, bool literal) {
     if (syl_.empty()) {
         if (s == 3) {
             return handleLiteralChar(c); // a tone cannot start a syllable
+        }
+        // Several layouts put punctuation on 注音 keys — on 大千 the comma is
+        // ㄝ, the period ㄡ. Those finals only ever follow an initial or a
+        // medial, so with full-width punctuation on, a punctuation-looking key
+        // pressed with no syllable under way is punctuation. Mid-syllable the
+        // key keeps its 注音 meaning, so ㄒㄧㄝ still types normally.
+        if (fullWidthPunct_ && inputer::isSymbolLikeZhuyinKey(c)) {
+            return handleLiteralChar(c);
         }
         syl_.push_back(c);
         return {true, false, {}, true}; // raw until a tone completes it
@@ -1119,11 +1212,13 @@ KeyResult Buffer::handleChar(char c, bool literal) {
 
 KeyResult Buffer::handleLiteralChar(char c) {
     if (fullWidthPunct_) {
-        std::string punct = chinesePunct(c);
+        // chinesePunct() discovers full-width forms by asking libchewing what a
+        // key produces, which comes up empty for keys the layout spends on 注音
+        // — the comma is ㄝ on 大千, so it never yielded ，. The shortcut table
+        // names those five explicitly and falls through to the probe otherwise.
+        std::string punct = chinesePunctShortcut(c);
         if (!punct.empty()) {
-            freezeAll();
-            cells_.push_back({false, punct, {}});
-            return {true, false, {}, true};
+            return insertPunctuation(punct);
         }
     }
     if (token_ == Token::English) {
@@ -1561,13 +1656,17 @@ void Buffer::learnFromCells() {
 
     for (const auto &span : explicitSpans) {
         std::string phrase;
+        std::vector<std::string> readings;
         for (int j = span.start; j <= span.end; ++j) {
             phrase += cells_[j].text;
+            readings.push_back(cells_[j].reading);
         }
         // Persist only an explicit candidate pick. Accepted defaults remain
         // ordinary libchewing learning, so a user's whole learned dictionary
-        // can never become an Ari hard-priority list by accident.
-        zhuyin_.rememberPreferredPhrase(phrase);
+        // can never become an Ari hard-priority list by accident. The readings
+        // let this reach libchewing's user dictionary too, which is what makes
+        // the choice outlast the current session.
+        zhuyin_.rememberPreferredPhrase(phrase, readings);
     }
 
     for (const auto &span : explicitSpans) {
@@ -1904,7 +2003,7 @@ void Buffer::buildPunctuationCandidates() {
 }
 
 int Buffer::visibleCandidateCount() const {
-    if (!selecting_ || !candOpen_ || selCands_.empty()) {
+    if (!candidateWindowOpen() || selCands_.empty()) {
         return 0;
     }
     int start = selPage_ * inputer::kCandPerPage;
@@ -2196,6 +2295,175 @@ KeyResult Buffer::forgetHighlightedCandidate() {
     runLoaded_ = false;
     loadCellCandidates();
     return {true, false, {}, true, false, "已忘記「" + phrase + "」"};
+}
+
+KeyResult Buffer::addPreeditToUserDictionary() {
+    // Fold the live chewing run into cells first: only finalized cells carry
+    // the reading each character needs.
+    freezeAll();
+    if (cells_.empty()) {
+        return {true, false, {}, false, false, "沒有可加入的詞"};
+    }
+
+    std::string phrase;
+    std::vector<std::string> readings;
+    for (const auto &cell : cells_) {
+        if (!cell.chinese || cell.reading.empty()) {
+            return {true, false, {}, false, false, "只能加入純中文的詞"};
+        }
+        phrase += cell.text;
+        readings.push_back(cell.reading);
+    }
+
+    if (!zhuyin_.rememberPreferredPhrase(phrase, readings)) {
+        return {true, false, {}, false, false, "無法加入「" + phrase + "」"};
+    }
+    return {true, false, {}, true, false, "已加入「" + phrase + "」"};
+}
+
+KeyResult Buffer::placePunctuation(const std::string &punct) {
+    // Typing the closing half when it is already parked right after the caret
+    // steps over it instead of producing a second one.
+    if (!tail_.empty() && tail_.front().text == punct) {
+        cells_.push_back(tail_.front());
+        tail_.erase(tail_.begin());
+        return {true, false, {}, true};
+    }
+
+    cells_.push_back({false, punct, {}});
+    if (const std::string closing = closingPunctuationFor(punct);
+        !closing.empty()) {
+        // Parked in tail_, which is exactly where caretChar() puts the caret:
+        // between the two halves.
+        tail_.insert(tail_.begin(), Cell{false, closing, {}});
+    }
+    return {true, false, {}, true};
+}
+
+// ---------------------------------------------------------------------------
+// Text templates
+// ---------------------------------------------------------------------------
+
+void Buffer::loadTemplateCandidates() {
+    selCands_.clear();
+    selPage_ = 0;
+    highlight_ = 0;
+    int order = 0;
+    for (const inputer::Template &entry :
+         inputer::templateStore().matching(templateCode_)) {
+        // The content is the row label, not the code: once a code is typed the
+        // choice is between the entries sharing it, and only the content tells
+        // them apart. Two rows reading "tem  信箱" would also be identical
+        // strings, which the candidate panel collapses into one.
+        std::string label = entry.content;
+        // A row is one line; a multi-line template shows its first line.
+        if (const std::size_t nl = label.find('\n'); nl != std::string::npos) {
+            label = label.substr(0, nl) + " …";
+        }
+        constexpr int kMaxLabel = 40;
+        if (inputer::unicode::graphemeCount(label) > kMaxLabel) {
+            label = label.substr(
+                        0, inputer::unicode::graphemeOffset(label, kMaxLabel)) +
+                    "…";
+        }
+        selCands_.push_back({entry.content, label, kPunctuationCandidateDown, 0,
+                             0, order++});
+    }
+    // Deliberately no rankSelCands(): candidateScore() penalises anything
+    // containing ASCII letters, which is every template code.
+}
+
+KeyResult Buffer::leaveTemplateMode(bool emitPrefixKey) {
+    templateMode_ = false;
+    templateCode_.clear();
+    selCands_.clear();
+    selPage_ = 0;
+    highlight_ = 0;
+    if (!emitPrefixKey) {
+        return {true, false, {}, true};
+    }
+    // Pressing the prefix key again is the way out that also types the
+    // character, so a backtick remains reachable without switching modes.
+    return handleChar(static_cast<char>(kTemplatePrefixKey));
+}
+
+KeyResult Buffer::pickTemplate(int pageIndex) {
+    const int gi = selPage_ * inputer::kCandPerPage + pageIndex;
+    if (gi < 0 || gi >= static_cast<int>(selCands_.size())) {
+        return {true, false, {}, false};
+    }
+    // Committed rather than placed in the pre-edit. A template is finished text:
+    // this keeps its newlines intact (the paste path folds them into spaces),
+    // avoids turning a 2000-character block into 2000 cells, and leaves
+    // caretChar()/feedRun()/learnFromCells() untouched.
+    const std::string content = selCands_[gi].text;
+    reset();
+    return {true, true, content, true};
+}
+
+KeyResult Buffer::handleTemplate(const fcitx::Key &key, fcitx::KeySym sym) {
+    if (hasWordModifier(key)) {
+        return {false, false, {}, false}; // let the application have its chords
+    }
+
+    if (sym == kTemplatePrefixKey) {
+        return leaveTemplateMode(/*emitPrefixKey=*/true);
+    }
+    // Escape must be handled here: the shared path resets the whole pre-edit,
+    // which would be the wrong thing to do to a sentence in progress.
+    if (sym == FcitxKey_Escape) {
+        return leaveTemplateMode(/*emitPrefixKey=*/false);
+    }
+    if (sym == FcitxKey_BackSpace) {
+        if (templateCode_.empty()) {
+            return leaveTemplateMode(/*emitPrefixKey=*/false);
+        }
+        templateCode_.pop_back();
+        loadTemplateCandidates();
+        return {true, false, {}, true};
+    }
+
+    if (sym == FcitxKey_Return || sym == FcitxKey_KP_Enter) {
+        return selCands_.empty() ? leaveTemplateMode(false) : pickTemplate(highlight_);
+    }
+    if (sym == FcitxKey_Down || sym == FcitxKey_Up) {
+        if (selCands_.empty()) {
+            return {true, false, {}, false};
+        }
+        const int pageCount = visibleCandidateCount();
+        if (pageCount > 0) {
+            highlight_ = sym == FcitxKey_Down
+                             ? (highlight_ + 1) % pageCount
+                             : (highlight_ + pageCount - 1) % pageCount;
+        }
+        return {true, false, {}, true};
+    }
+    if (sym == FcitxKey_Page_Down || sym == FcitxKey_Page_Up) {
+        const int pages = candidatePageCount();
+        if (pages > 1) {
+            selPage_ = sym == FcitxKey_Page_Down ? (selPage_ + 1) % pages
+                                                 : (selPage_ + pages - 1) % pages;
+            highlight_ = 0;
+        }
+        return {true, false, {}, true};
+    }
+    if (sym >= FcitxKey_1 && sym <= FcitxKey_9) {
+        return pickTemplate(static_cast<int>(sym - FcitxKey_1));
+    }
+
+    // Codes are letters only, so a digit can safely mean "pick that row".
+    if (sym >= 33 && sym <= 126) {
+        templateCode_.push_back(static_cast<char>(sym));
+        loadTemplateCandidates();
+        return {true, false, {}, true};
+    }
+    return {true, false, {}, false}; // swallow the rest; the mode owns the keys
+}
+
+KeyResult Buffer::insertPunctuation(const std::string &punct) {
+    clearSelectionUndo();
+    freezeAll();
+    return placePunctuation(punct);
 }
 
 void Buffer::mergeTail() {

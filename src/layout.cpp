@@ -77,6 +77,13 @@ std::array<int8_t, 128> buildSlots(KeyboardLayout layout) {
     chewing_set_KBType(ctx, chewingKeyboardType(layout));
     for (int c = 33; c <= 126; ++c) {
         chewing_Reset(ctx);
+        // libchewing 0.8's chewing_Reset() memsets its entire state, which
+        // drops the keyboard type back to KB_DEFAULT. Without re-asserting it
+        // every probed layout looks identical to 大千, and
+        // keyboardLayoutAvailable() then correctly refuses to offer any of
+        // them. Re-setting a value the library already holds is a no-op on
+        // releases that preserve it.
+        chewing_set_KBType(ctx, chewingKeyboardType(layout));
         chewing_handle_Default(ctx, c);
         if (const char *bpmf = chewing_bopomofo_String_static(ctx);
             bpmf && *bpmf) {

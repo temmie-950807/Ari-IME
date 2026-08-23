@@ -104,7 +104,13 @@ public:
     // Persist a phrase that the user explicitly selected in the current
     // composition. This records Ari's preference without confusing it with
     // libchewing's broad learned-frequency dictionary.
-    bool rememberPreferredPhrase(const std::string &phrase);
+    // `readings` holds one raw key sequence per character of the phrase, as the
+    // cells carry them. They are converted to canonical Bopomofo so the choice
+    // also lands in libchewing's own user dictionary; without that the
+    // promotion path below has nothing to work with on releases whose
+    // auto-learn does not record a single deliberate pick.
+    bool rememberPreferredPhrase(const std::string &phrase,
+                                 const std::vector<std::string> &readings);
     // Apply explicit/imported preferences when an older libchewing build does
     // not rank user phrases ahead of its built-in dictionary. This is a no-op
     // on libchewing >= 0.10, which handles that precedence natively.
@@ -142,6 +148,11 @@ private:
     // Load Ari's explicit/imported phrase preferences once per context. The
     // cache is separate from libchewing's broad learned dictionary.
     bool loadUserPhraseCache();
+
+    // Canonical Bopomofo for one syllable's raw keys ("su3" -> "ㄋㄧˇ"), which
+    // is the form libchewing's user dictionary stores. Empty when the keys do
+    // not spell a syllable. Uses and then clears the shared context.
+    std::string bopomofoForKeys(const std::string &keys);
 
     ChewingContext *ctx_ = nullptr;
     inputer::KeyboardLayout layout_ = inputer::currentKeyboardLayout();

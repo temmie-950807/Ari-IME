@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_TW</string>
+	<key>CFBundleExecutable</key>
+	<string>@ARI_EXECUTABLE_NAME@</string>
+	<key>CFBundleIdentifier</key>
+	<string>@ARI_BUNDLE_ID@</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Ari IME</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@ARI_VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@ARI_VERSION@</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>GPL-3.0-or-later</string>
+
+	<key>InputMethodConnectionName</key>
+	<string>@ARI_BUNDLE_ID@_Connection</string>
+	<key>InputMethodServerControllerClass</key>
+	<string>AriInputController</string>
+	<key>InputMethodServerDelegateClass</key>
+	<string>AriInputController</string>
+
+	<key>ComponentInputModeDict</key>
+	<dict>
+		<key>tsInputModeListKey</key>
+		<dict>
+			<key>@ARI_BUNDLE_ID@.Zhuyin</key>
+			<dict>
+				<key>TISInputSourceID</key>
+				<string>@ARI_BUNDLE_ID@.Zhuyin</string>
+				<key>TISIntendedLanguage</key>
+				<string>zh-Hant</string>
+				<key>tsInputModeCharacterRepertoireKey</key>
+				<array>
+					<string>Hant</string>
+					<string>Han</string>
+				</array>
+				<key>tsInputModeDefaultStateKey</key>
+				<true/>
+				<key>tsInputModeIsVisibleKey</key>
+				<true/>
+				<key>tsInputModeMenuIconFileKey</key>
+				<string>ari.pdf</string>
+				<key>tsInputModeAlternateMenuIconFileKey</key>
+				<string>ari.pdf</string>
+				<key>tsInputModePaletteIconFileKey</key>
+				<string>ari.pdf</string>
+				<key>tsInputModePrimaryInScriptKey</key>
+				<true/>
+				<key>tsInputModeScriptKey</key>
+				<string>smTradChinese</string>
+			</dict>
+		</dict>
+		<key>tsVisibleInputModeOrderedArrayKey</key>
+		<array>
+			<string>@ARI_BUNDLE_ID@.Zhuyin</string>
+		</array>
+	</dict>
+</dict>
+</plist>

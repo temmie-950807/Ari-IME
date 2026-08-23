@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -14,12 +15,18 @@
 #include <utility>
 #include <vector>
 
+#include "unicode.h"
 #include "user_data.h"
 #include "zhuyin.h"
 
 namespace {
 
 constexpr std::string_view kHeader = "# Ari IME user dictionary v1";
+
+// libchewing stops accepting user phrases past this length — measured against
+// the bundled 0.8.5, where the twelfth character makes chewing_userphrase_add()
+// return 0 with no error. Anything longer belongs in the long-phrase store.
+constexpr int kMaxChewingPhrase = 11;
 
 #ifndef INPUTER_CHEWING_VERSION
 #define INPUTER_CHEWING_VERSION "unknown"
@@ -266,6 +273,51 @@ int commandExport(const std::string &filename) {
     return 0;
 }
 
+// Going (自然輸入法) exports its personal dictionary as a CSV whose first line
+// is an HTML-comment marker. The readings are already canonical Bopomofo, so
+// the conversion is purely about separators: comma to tab, hyphen to space.
+bool looksLikeGoingCsv(const std::string &firstLine) {
+    return firstLine.rfind("<!--Going", 0) == 0;
+}
+
+// Rewrites a Going CSV into the tab-separated form readEntries() expects.
+// Entries longer than libchewing's phrase limit are handed back separately:
+// chewing_userphrase_add() rejects them without an error, so importing them as
+// dictionary entries would silently drop the user's data.
+std::string convertGoingCsv(std::istream &in,
+                            std::vector<std::string> &tooLong) {
+    std::string out = std::string(kHeader) + "\n";
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.empty() || line.rfind("<!--", 0) == 0) {
+            continue;
+        }
+        // Split on the first comma only: a Chinese phrase never contains one,
+        // and the reading field might.
+        const std::size_t comma = line.find(',');
+        if (comma == std::string::npos || comma == 0 ||
+            comma + 1 >= line.size()) {
+            continue;
+        }
+        const std::string phrase = line.substr(0, comma);
+        std::string reading = line.substr(comma + 1);
+        std::replace(reading.begin(), reading.end(), '-', ' ');
+
+        if (inputer::unicode::graphemeCount(phrase) > kMaxChewingPhrase) {
+            tooLong.push_back(phrase);
+            continue;
+        }
+        out += phrase;
+        out += '\t';
+        out += reading;
+        out += '\n';
+    }
+    return out;
+}
+
 int commandImport(const std::string &filename, bool dryRun) {
     std::ifstream in;
     if (filename != "-") {
@@ -277,12 +329,68 @@ int commandImport(const std::string &filename, bool dryRun) {
         }
     }
     std::istream &source = filename == "-" ? std::cin : in;
+
+    // Peek at the first line to decide whether this needs converting first.
+    const std::streampos start = source.tellg();
+    std::string firstLine;
+    std::getline(source, firstLine);
+    if (!firstLine.empty() && firstLine.back() == '\r') {
+        firstLine.pop_back();
+    }
+
+    std::vector<std::string> tooLong;
+    std::string converted;
+    std::istringstream convertedStream;
+    if (looksLikeGoingCsv(firstLine)) {
+        converted = convertGoingCsv(source, tooLong);
+        convertedStream.str(converted);
+    } else if (start != std::streampos(-1)) {
+        source.clear();
+        source.seekg(start);
+    } else {
+        // A pipe cannot be rewound, so the line already read is put back in
+        // front of the rest.
+        converted = firstLine + "\n";
+        std::string rest((std::istreambuf_iterator<char>(source)),
+                         std::istreambuf_iterator<char>());
+        converted += rest;
+        convertedStream.str(converted);
+    }
+
+    std::istream &parseSource =
+        converted.empty() ? source : static_cast<std::istream &>(convertedStream);
+
     std::vector<Entry> entries;
     std::string parseError;
-    if (!readEntries(source, entries, parseError)) {
+    if (!readEntries(parseSource, entries, parseError)) {
         std::cerr << "ari-ime-dict: invalid import: " << parseError << '\n';
         return 2;
     }
+    if (!tooLong.empty()) {
+        std::vector<inputer::LongPhrase> phrases = inputer::loadLongPhrases();
+        std::size_t added = 0;
+        for (const std::string &phrase : tooLong) {
+            const auto existing =
+                std::find_if(phrases.begin(), phrases.end(),
+                             [&](const inputer::LongPhrase &entry) {
+                                 return entry.text == phrase;
+                             });
+            if (existing != phrases.end()) {
+                continue;
+            }
+            // Imported deliberately, so it starts out already eligible rather
+            // than waiting to be typed three more times.
+            phrases.push_back({inputer::kLongPhraseMinCount, phrase});
+            ++added;
+        }
+        if (!dryRun && added > 0) {
+            inputer::saveLongPhrases(phrases);
+        }
+        std::cout << (dryRun ? "would move " : "moved ") << added
+                  << " phrase(s) too long for the dictionary into "
+                  << inputer::longPhrasesPath().string() << '\n';
+    }
+
     if (dryRun) {
         std::cout << "validated " << entries.size() << " entr"
                   << (entries.size() == 1 ? "y" : "ies") << "\n";

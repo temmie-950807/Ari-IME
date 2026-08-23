@@ -99,6 +99,17 @@ public:
     // Tracks the selected cell while selecting and the insertion point while
     // typing mid-string, so the caret never jumps to the end during insertion.
     int caretChar() const;
+    // True when the whole pre-edit is settled English: no Chinese characters,
+    // no syllable under way, and the state machine has already ruled out the
+    // current token becoming 注音. A front end may commit at this point so the
+    // application can see the text — at the cost of a later tone no longer
+    // being able to peel a syllable off the tail (aceru/6 -> acer螢).
+    bool isSettledEnglish() const;
+    // True while the template code is being typed. The front end needs this to
+    // know that the pre-edit is a code being composed rather than text destined
+    // for the application — committing it on focus loss would insert a template
+    // the user never chose.
+    bool isTemplateMode() const { return templateMode_; }
     bool isEditing() const { return selecting_; }
     bool isPicking() const { return selecting_ && candOpen_; }
 
@@ -138,6 +149,23 @@ public:
     // False when the 注音 engine failed to load; the engine degrades to
     // plain-English passthrough and the frontend can warn the user once.
     bool engineReady() const { return zhuyin_.ok(); }
+
+    // --- Personal dictionary ---
+    // Add whatever Chinese is currently composed as one personal phrase, so a
+    // name or a term can be taught directly instead of having to be re-picked
+    // every time. Refuses anything that is not all Chinese, since a reading is
+    // needed for every character.
+    KeyResult addPreeditToUserDictionary();
+    // Read, add and remove entries for a dictionary manager. These go through
+    // the composing engine rather than a second libchewing context, which would
+    // race with it over the same files.
+    std::vector<UserPhrase> userPhrases() { return zhuyin_.userPhrases(); }
+    bool addUserPhrase(const std::string &phrase, const std::string &reading) {
+        return zhuyin_.addUserPhrase(phrase, reading) >= 0;
+    }
+    bool forgetUserPhrase(const std::string &phrase) {
+        return zhuyin_.forgetUserPhrase(phrase) > 0;
+    }
     inputer::KeyboardLayout keyboardLayout() const { return layout_; }
 
 private:
@@ -276,6 +304,28 @@ private:
     // Fold the live typing tail into cells_, then re-append the parked tail_,
     // reuniting the pre-edit into one cells_ list (used before commit and before
     // re-entering selection).
+    // Insert one punctuation character, auto-pairing Chinese brackets and
+    // stepping over a closing half that is already parked after the caret.
+    KeyResult insertPunctuation(const std::string &punct);
+
+    // --- Text templates ---
+    // A self-contained mode: the code is collected raw, never routed through
+    // the 注音 parser, and the chosen content is committed straight to the
+    // application rather than entering the pre-edit.
+    // The candidate window is shared by ordinary selection and template mode;
+    // the two are mutually exclusive because template mode is only entered from
+    // an empty pre-edit.
+    bool candidateWindowOpen() const {
+        return templateMode_ || (selecting_ && candOpen_);
+    }
+
+    KeyResult handleTemplate(const fcitx::Key &key, fcitx::KeySym sym);
+    void loadTemplateCandidates();
+    KeyResult pickTemplate(int pageIndex);
+    KeyResult leaveTemplateMode(bool emitPrefixKey);
+    // The insertion itself, without deciding how the live tail is folded away
+    // first — callers differ on that and on what the token state becomes.
+    KeyResult placePunctuation(const std::string &punct);
     void mergeTail();
     // ↑ on an English cell: gather this cell plus the next few cells' raw keys
     // and, if they form a 注音 syllable, merge them into one Chinese cell and
@@ -295,6 +345,10 @@ private:
     bool learningAllowed_ = true;
     inputer::KeyboardLayout layout_ = inputer::KeyboardLayout::Default;
     Token token_ = Token::Chinese;
+    // Mutually exclusive with selecting_: the mode is only entered from an
+    // empty pre-edit and always leaves through leaveTemplateMode().
+    bool templateMode_ = false;
+    std::string templateCode_;
     std::vector<Cell> cells_;             // finalized pre-edit, before the live tail
     std::vector<Cell> tail_;              // cells parked AFTER the live tail while
                                           // inserting mid-string; empty otherwise
