@@ -40,9 +40,9 @@ endforeach()
 # wasm/include holds the header shim that satisfies that, and it must come first
 # on the include path so a system Fcitx5 installation cannot shadow it.
 #
-# INPUTER_WASM is deliberately NOT defined: the WASM-only branches hardcode
+# ARI_IME_WASM is deliberately NOT defined: the WASM-only branches hardcode
 # /usr/share/libchewing and a MEMFS data directory. main.mm points libchewing at
-# the bundle through CHEWING_PATH and INPUTER_USER_DATA_DIR instead, which is
+# the bundle through CHEWING_PATH and ARI_IME_USER_DATA_DIR instead, which is
 # why src/ needs no macOS-specific changes.
 set(ARI_CORE_SOURCES
     "${ARI_SOURCE_ROOT}/src/layout.cpp"
@@ -59,10 +59,10 @@ target_include_directories(ari-ime-core
         "${CHEWING_INCLUDE_DIR}"
 )
 # build-libchewing-macos.sh pins v0.8.5, which predates chewing_ack().
-# INPUTER_LEGACY_PREFERENCE_PROMOTION is deliberately left undefined: it turns
+# ARI_IME_LEGACY_PREFERENCE_PROMOTION is deliberately left undefined: it turns
 # promoteUserPhrases() from a no-op into a libchewing replay loop on the typing
 # hot path. The WASM build makes the same choice against the same version.
-target_compile_definitions(ari-ime-core PUBLIC INPUTER_LIBCHEWING_LEGACY_OUTPUT)
+target_compile_definitions(ari-ime-core PUBLIC ARI_IME_LIBCHEWING_LEGACY_OUTPUT)
 target_compile_options(ari-ime-core PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(ari-ime-core PUBLIC "${CHEWING_LIBRARY}")
 
@@ -114,7 +114,7 @@ add_executable(ari-ime-dict "${ARI_SOURCE_ROOT}/src/dict_tool.cpp")
 set_target_properties(ari-ime-dict PROPERTIES OUTPUT_NAME "ari-ime-dict-bin")
 target_link_libraries(ari-ime-dict PRIVATE ari-ime-core)
 target_compile_definitions(ari-ime-dict
-    PRIVATE INPUTER_CHEWING_VERSION="${ARI_CHEWING_VERSION}")
+    PRIVATE ARI_IME_CHEWING_VERSION="${ARI_CHEWING_VERSION}")
 target_compile_options(ari-ime-dict PRIVATE -Wall -Wextra -Wpedantic)
 add_custom_command(TARGET AriIME POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy
@@ -153,7 +153,7 @@ if(BUILD_TESTING)
         PRIVATE ari-ime-core "${INPUT_METHOD_KIT}" "${COCOA}" "${CARBON}")
     add_test(NAME controller COMMAND controller_test)
     set_tests_properties(controller PROPERTIES
-        ENVIRONMENT "CHEWING_PATH=${CHEWING_DATA_DIR};INPUTER_USER_DATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-user-data-controller;INPUTER_DISABLE_AUTOLEARN=1")
+        ENVIRONMENT "CHEWING_PATH=${CHEWING_DATA_DIR};ARI_IME_USER_DATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-user-data-controller;ARI_IME_DISABLE_AUTOLEARN=1")
 
     add_executable(core_smoke_test CoreSmokeTest.cpp)
     target_link_libraries(core_smoke_test PRIVATE ari-ime-core)

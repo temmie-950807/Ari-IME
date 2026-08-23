@@ -10,7 +10,7 @@ and display server behavior.
 
   ```sh
   scripts/check.sh
-  INPUTER_BUILD_DIR=build bash scripts/install-local.sh
+  ARI_IME_BUILD_DIR=build bash scripts/install-local.sh
   ```
 
   For a system/package install, use the distribution package or
@@ -31,14 +31,14 @@ and display server behavior.
 - Select it and verify that the running daemon uses it:
 
   ```sh
-  fcitx5-remote -s inputer
-  test "$(fcitx5-remote -n)" = inputer
+  fcitx5-remote -s ari-ime
+  test "$(fcitx5-remote -n)" = ari-ime
   ```
 
 - Test with a fresh learned dictionary when validating deterministic behavior:
 
   ```sh
-  INPUTER_DISABLE_AUTOLEARN=1 fcitx5 -r
+  ARI_IME_DISABLE_AUTOLEARN=1 fcitx5 -r
   ```
 
 - Candidate ordering comes from libchewing and may change across libchewing

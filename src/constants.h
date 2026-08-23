@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#ifndef INPUTER_CONSTANTS_H
-#define INPUTER_CONSTANTS_H
+#ifndef ARI_IME_CONSTANTS_H
+#define ARI_IME_CONSTANTS_H
 
-namespace inputer {
+namespace ari_ime {
 
 // Candidates shown per page. Must stay in sync across three places: chewing's
 // candPerPage, the UI candidate list page size / selection keys, and the
@@ -22,6 +22,6 @@ inline constexpr int kMaxCompositionChars = 32;
 // single characters).
 inline constexpr int kMaxSyllables = 8;
 
-} // namespace inputer
+} // namespace ari_ime
 
-#endif // INPUTER_CONSTANTS_H
+#endif // ARI_IME_CONSTANTS_H

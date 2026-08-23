@@ -73,7 +73,13 @@ const LEARNING_FILES = Object.freeze([
 
 function keySym(key) {
   if (typeof key === "number") {
-    return key >>> 0;
+    if (!Number.isInteger(key) || key < 0 || key > 0xffffffff) {
+      throw new TypeError(`Keysym must be a non-negative 32-bit integer: ${key}`);
+    }
+    return key;
+  }
+  if (typeof key !== "string" || key.length === 0) {
+    throw new TypeError(`Unsupported key: ${key}`);
   }
   if (key.length === 1) {
     return key.charCodeAt(0);
@@ -86,7 +92,12 @@ function keySym(key) {
 
 function modifierMask(modifiers = 0) {
   if (typeof modifiers === "number") {
-    return modifiers >>> 0;
+    if (!Number.isInteger(modifiers) || modifiers < 0 || modifiers > 0xffffffff) {
+      throw new TypeError(
+        `Modifiers must be a non-negative 32-bit integer: ${modifiers}`,
+      );
+    }
+    return modifiers;
   }
   let mask = 0;
   if (modifiers.shift) mask |= MODIFIERS.shift;
@@ -132,7 +143,20 @@ function writeLearningState(module, state) {
   for (const name of LEARNING_FILES) {
     const data = state[name];
     if (data === undefined) continue;
-    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+    // Plain-JS callers bypass the TypeScript types; reject anything that is
+    // not real binary data instead of silently writing coerced garbage.
+    let bytes;
+    if (data instanceof Uint8Array) {
+      bytes = data;
+    } else if (data instanceof ArrayBuffer) {
+      bytes = new Uint8Array(data);
+    } else if (Array.isArray(data) && data.every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
+      bytes = new Uint8Array(data);
+    } else {
+      throw new TypeError(
+        `Learning state for ${name} must be a Uint8Array or ArrayBuffer`,
+      );
+    }
     module.FS.writeFile(`/ari-ime/${name}`, bytes);
   }
 }

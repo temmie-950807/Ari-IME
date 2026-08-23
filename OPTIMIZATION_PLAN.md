@@ -112,7 +112,7 @@ usability first: feature coverage, UX, performance, and engineering quality.
   backup-producing first-run profile setup, plus `ari-ime-reset-data` so
   package users can reset learning without a source checkout.
 - Made `ari-ime-enable` start or reload Fcitx5 in an explicit graphical
-  session and verify that `inputer` is the active input method; failures now
+  session and verify that `ari-ime` is the active input method; failures now
   return non-zero instead of looking successful.
 - Installed `ari-ime-dict` alongside the input method and covered its binary,
   parser, import/export, candidate restoration, and backup behavior in the

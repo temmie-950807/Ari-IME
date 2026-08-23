@@ -44,8 +44,8 @@ int main(int argc, char **argv) {
         return 2;
     }
     setenv("CHEWING_PATH", argv[1], 1);
-    setenv("INPUTER_USER_DATA_DIR", argv[2], 1);
-    setenv("INPUTER_DISABLE_AUTOLEARN", "1", 1);
+    setenv("ARI_IME_USER_DATA_DIR", argv[2], 1);
+    setenv("ARI_IME_DISABLE_AUTOLEARN", "1", 1);
 
     {
         Buffer buffer;
@@ -89,10 +89,10 @@ int main(int argc, char **argv) {
     // type, so without re-asserting it the user silently lands back on the
     // 大千 key map partway through typing.
     {
-        assert(inputer::keyboardLayoutAvailable(inputer::KeyboardLayout::Hsu) &&
+        assert(ari_ime::keyboardLayoutAvailable(ari_ime::KeyboardLayout::Hsu) &&
                "Hsu layout should be selectable");
         Buffer buffer;
-        buffer.setKeyboardLayout(inputer::KeyboardLayout::Hsu);
+        buffer.setKeyboardLayout(ari_ime::KeyboardLayout::Hsu);
 
         type(buffer, "nef"); // 許氏: nef -> 你
         assert(buffer.preeditText() == "你");
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
         type(buffer, "nef");
         assert(buffer.preeditText() == "你" && "layout lost after reset");
 
-        buffer.setKeyboardLayout(inputer::KeyboardLayout::Default);
+        buffer.setKeyboardLayout(ari_ime::KeyboardLayout::Default);
     }
 
     // Full-width punctuation has to reach the keys the layout spends on 注音 —
@@ -129,6 +129,15 @@ int main(int argc, char **argv) {
         syllable.setFullWidthPunct(true);
         type(syllable, "vu,4");
         assert(syllable.preeditText() == "謝" && "comma still types ㄝ");
+
+        // A 注音 key only converts when the shortcut table names it. Asking
+        // libchewing about any other one parks a Bopomofo symbol, and
+        // force-committing that emits a stray ㄅㄆㄇ instead of punctuation.
+        Buffer bopomofo;
+        bopomofo.setFullWidthPunct(true);
+        type(bopomofo, "a");
+        assert(bopomofo.preeditText() == "a" &&
+               "an unnamed 注音 key must not go through the probe");
     }
 
     // The two punctuation mechanisms are independent, and the useful pairing is
@@ -137,7 +146,7 @@ int main(int argc, char **argv) {
     {
         Buffer b;
         b.setChinesePunctuationShortcut(
-            inputer::ChinesePunctuationShortcut::Shift);
+            ari_ime::ChinesePunctuationShortcut::Shift);
 
         type(b, "/");
         assert(b.preeditText() == "/" && "a bare slash must stay a slash");
@@ -201,10 +210,10 @@ int main(int argc, char **argv) {
     // entry can never take effect.
     {
         const std::string learningDir = std::string(argv[2]) + "-learning";
-        setenv("INPUTER_USER_DATA_DIR", learningDir.c_str(), 1);
-        unsetenv("INPUTER_DISABLE_AUTOLEARN"); // this is the thing under test
+        setenv("ARI_IME_USER_DATA_DIR", learningDir.c_str(), 1);
+        unsetenv("ARI_IME_DISABLE_AUTOLEARN"); // this is the thing under test
         std::error_code ec;
-        inputer::resetUserDictionary(ec);
+        ari_ime::resetUserDictionary(ec);
 
         std::string picked;
         {
@@ -226,8 +235,8 @@ int main(int argc, char **argv) {
         assert(relaunched.preeditText() == picked &&
                "an explicit pick must come back first next time");
 
-        setenv("INPUTER_DISABLE_AUTOLEARN", "1", 1);
-        setenv("INPUTER_USER_DATA_DIR", argv[2], 1);
+        setenv("ARI_IME_DISABLE_AUTOLEARN", "1", 1);
+        setenv("ARI_IME_USER_DATA_DIR", argv[2], 1);
     }
 
     // --- Text templates ---------------------------------------------------
@@ -236,7 +245,7 @@ int main(int argc, char **argv) {
     // the file stays greppable and a hand edit cannot desynchronise a
     // multi-line record.
     {
-        const std::filesystem::path path = inputer::templatesPath();
+        const std::filesystem::path path = ari_ime::templatesPath();
         assert(!path.empty());
         {
             std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -247,61 +256,61 @@ int main(int argc, char **argv) {
             out << "壞的\tno-tab-here\n";      // too few fields, dropped
             out << "數字\tt3m\tnope\n";        // digit in code, dropped
         }
-        inputer::templateStore().reload();
+        ari_ime::templateStore().reload();
 
-        const auto all = inputer::loadTemplates();
+        const auto all = ari_ime::loadTemplates();
         assert(all.size() == 2 && "malformed lines must be dropped, not fatal");
         assert(all[1].content == "一樓\n二樓" && "\\n must become a real newline");
 
-        assert(inputer::templateStore().matching("tem").size() == 1);
-        assert(inputer::templateStore().matching("t").size() == 1);
-        assert(inputer::templateStore().matching("").size() == 2);
-        assert(inputer::templateStore().matching("zz").empty());
+        assert(ari_ime::templateStore().matching("tem").size() == 1);
+        assert(ari_ime::templateStore().matching("t").size() == 1);
+        assert(ari_ime::templateStore().matching("").size() == 2);
+        assert(ari_ime::templateStore().matching("zz").empty());
 
-        assert(inputer::validTemplateCode("tem"));
-        assert(inputer::validTemplateCode("my_sig.v2-b") == false); // digit
-        assert(!inputer::validTemplateCode("t3m") && "digits select candidates");
-        assert(!inputer::validTemplateCode(""));
+        assert(ari_ime::validTemplateCode("tem"));
+        assert(ari_ime::validTemplateCode("my_sig.v2-b") == false); // digit
+        assert(!ari_ime::validTemplateCode("t3m") && "digits select candidates");
+        assert(!ari_ime::validTemplateCode(""));
     }
 
     // --- Long phrases ------------------------------------------------------
     {
-        inputer::longPhraseStore().reload();
+        ari_ime::longPhraseStore().reload();
         const std::string sentence = "不好意思打擾了再麻煩協助確認";  // 14 chars
 
-        inputer::longPhraseStore().bump("太短");        // below the floor
-        assert(inputer::longPhraseStore().suggest("太短", 5).empty());
+        ari_ime::longPhraseStore().bump("太短");        // below the floor
+        assert(ari_ime::longPhraseStore().suggest("太短", 5).empty());
 
         // A phrase is only offered once it has been seen enough times.
-        inputer::longPhraseStore().bump(sentence);
-        inputer::longPhraseStore().bump(sentence);
-        assert(inputer::longPhraseStore().suggest("不好", 5).empty() &&
+        ari_ime::longPhraseStore().bump(sentence);
+        ari_ime::longPhraseStore().bump(sentence);
+        assert(ari_ime::longPhraseStore().suggest("不好", 5).empty() &&
                "must not suggest below the count threshold");
-        inputer::longPhraseStore().bump(sentence);
+        ari_ime::longPhraseStore().bump(sentence);
 
-        const auto hits = inputer::longPhraseStore().suggest("不好", 5);
+        const auto hits = ari_ime::longPhraseStore().suggest("不好", 5);
         assert(hits.size() == 1);
         assert(hits[0] == "意思打擾了再麻煩協助確認" &&
                "suggestion is the remainder, not the whole phrase");
         // An exact match has nothing left to add.
-        assert(inputer::longPhraseStore().suggest(sentence, 5).empty());
+        assert(ari_ime::longPhraseStore().suggest(sentence, 5).empty());
 
         // The counts have to survive a process restart.
-        inputer::longPhraseStore().reload();
-        assert(inputer::longPhraseStore().suggest("不好", 5).size() == 1);
+        ari_ime::longPhraseStore().reload();
+        assert(ari_ime::longPhraseStore().suggest("不好", 5).size() == 1);
     }
 
     // --- Template mode ----------------------------------------------------
     {
         {
-            std::ofstream out(inputer::templatesPath(),
+            std::ofstream out(ari_ime::templatesPath(),
                               std::ios::binary | std::ios::trunc);
             out << "# Ari IME templates v1\n";
             out << "信箱\ttem\ta@b.com\n";
             out << "信箱\ttem\tc@d.edu.tw\n";
             out << "地址\tadd\t一樓\\n二樓\n";
         }
-        inputer::templateStore().reload();
+        ari_ime::templateStore().reload();
 
         Buffer buffer;
         buffer.handleKey(fcitx::Key(static_cast<fcitx::KeySym>('`')));
@@ -387,9 +396,9 @@ int main(int argc, char **argv) {
     // Both files hold personal text, so a reset has to take them with it.
     {
         std::error_code ec;
-        assert(inputer::resetUserDictionary(ec));
-        assert(!std::filesystem::exists(inputer::templatesPath()));
-        assert(!std::filesystem::exists(inputer::longPhrasesPath()));
+        assert(ari_ime::resetUserDictionary(ec));
+        assert(!std::filesystem::exists(ari_ime::templatesPath()));
+        assert(!std::filesystem::exists(ari_ime::longPhrasesPath()));
     }
 
     std::puts("core smoke test passed");

@@ -44,7 +44,7 @@ Recent libchewing versions store learned phrases (`chewing.dat`,
 `chewing-deleted.dat`) at
 `CHEWING_USER_PATH`, falling back to `$XDG_DATA_HOME/chewing` — not at the
 `userpath` file passed to `chewing_new2`. Ari pins `CHEWING_USER_PATH` to its own
-data directory (`~/.config/inputer` by default) so learning stays self-contained
+data directory (`~/.config/ari-ime` by default) so learning stays self-contained
 and does not pollute the shared chewing directory used by other libchewing input
 methods (fcitx5-chewing, ibus-chewing).
 

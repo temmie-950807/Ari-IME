@@ -209,14 +209,14 @@ int main(void) {
         [defaults removePersistentDomainForName:kTestSuite];
         AriSetDefaultsForTesting(defaults);
 
-        // Learning is layered: INPUTER_DISABLE_AUTOLEARN only silences
+        // Learning is layered: ARI_IME_DISABLE_AUTOLEARN only silences
         // libchewing's own auto-learn, while Buffer still records deliberate
         // choices in Ari's sidecar. Both shift candidate order, so a leftover
         // dictionary from an earlier run would change which homophone comes
         // first. Start from an empty one.
         [defaults setBool:NO forKey:@"AutoLearn"];
         std::error_code ec;
-        inputer::resetUserDictionary(ec);
+        ari_ime::resetUserDictionary(ec);
 
         gClient = [AriTestClient new];
         // IMK's designated initializer rejects anything but its own client
@@ -398,11 +398,11 @@ int main(void) {
         // here would pick whichever template is highlighted and insert it.
         std::puts("template mode is discarded on focus loss");
         {
-            std::ofstream out(inputer::templatesPath().c_str(),
+            std::ofstream out(ari_ime::templatesPath().c_str(),
                               std::ios::binary | std::ios::trunc);
             out << "# Ari IME templates v1\n信箱\ttem\ta@b.com\n";
         }
-        inputer::templateStore().reload();
+        ari_ime::templateStore().reload();
         resetSession();
         [gController handleEvent:makeKeyDown(@"`", kVK_ANSI_Grave, 0)
                           client:gClient];
@@ -423,7 +423,7 @@ int main(void) {
         // Dvorak: og3 is 你 where the default layout uses su3.
         [defaults setInteger:5 forKey:@"KeyboardLayout"]; // KeyboardLayout::Dvorak
         [gController activateServer:gClient];
-        assert(inputer::currentKeyboardLayout() == inputer::KeyboardLayout::Dvorak);
+        assert(ari_ime::currentKeyboardLayout() == ari_ime::KeyboardLayout::Dvorak);
         gClient.markedText = @"";
         type(@"og3");
         expectEqual(gClient.markedText, @"你", "Dvorak og3");
@@ -490,7 +490,7 @@ int main(void) {
 
         // Shift on its own as the punctuation gesture: Shift+comma yields ，
         // instead of <. Symbols with no Chinese form keep their ASCII value.
-        [defaults setInteger:(NSInteger)inputer::ChinesePunctuationShortcut::Shift
+        [defaults setInteger:(NSInteger)ari_ime::ChinesePunctuationShortcut::Shift
                       forKey:@"ChinesePunctuationShortcut"];
         resetSession();
         [gController handleEvent:makeKeyDown(@"<", kVK_ANSI_Comma,
@@ -510,7 +510,7 @@ int main(void) {
         // libchewing's own auto-learn was fixed when the context was built —
         // so clearing it now enables deliberate additions without turning on
         // the implicit learning that would reorder candidates mid-test.
-        unsetenv("INPUTER_DISABLE_AUTOLEARN");
+        unsetenv("ARI_IME_DISABLE_AUTOLEARN");
 
         resetSession();
         type(@"su3cl3");
@@ -570,7 +570,7 @@ int main(void) {
         }
         std::printf("  ok  %-34s\n", "forget removes it");
 
-        setenv("INPUTER_DISABLE_AUTOLEARN", "1", 1);
+        setenv("ARI_IME_DISABLE_AUTOLEARN", "1", 1);
 
         std::puts("\ncontroller test passed");
     }

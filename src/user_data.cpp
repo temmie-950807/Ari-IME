@@ -8,12 +8,12 @@
 #include <stdexcept>
 #include <string>
 
-namespace inputer {
+namespace ari_ime {
 
 namespace {
 
 std::filesystem::path configuredUserDataDir() {
-    if (const char *overrideDir = std::getenv("INPUTER_USER_DATA_DIR");
+    if (const char *overrideDir = std::getenv("ARI_IME_USER_DATA_DIR");
         overrideDir && *overrideDir) {
         return std::filesystem::path(overrideDir);
     }
@@ -27,10 +27,10 @@ std::filesystem::path configuredUserDataDir() {
     }
 #endif
     if (const char *xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
-        return std::filesystem::path(xdg) / "inputer";
+        return std::filesystem::path(xdg) / "ari-ime";
     }
     if (const char *home = std::getenv("HOME"); home && *home) {
-        return std::filesystem::path(home) / ".config" / "inputer";
+        return std::filesystem::path(home) / ".config" / "ari-ime";
     }
     return {};
 }
@@ -382,7 +382,7 @@ std::filesystem::path userPreferencePath() {
 }
 
 bool autoLearnEnabled() {
-    return std::getenv("INPUTER_DISABLE_AUTOLEARN") == nullptr;
+    return std::getenv("ARI_IME_DISABLE_AUTOLEARN") == nullptr;
 }
 
 bool ensureUserDataDir(std::error_code &ec) {
@@ -423,6 +423,9 @@ bool resetUserDictionary(std::error_code &ec) {
 
     const std::filesystem::path paths[] = {
         dir / "userdict.dat",
+        // uhash.dat is written by libchewing's WASM build and by some older
+        // native releases; removing it when absent is a harmless no-op.
+        dir / "uhash.dat",
         dir / "chewing.dat",
         dir / "chewing-deleted.dat",
         dir / "preferences.tsv",
@@ -441,4 +444,4 @@ bool resetUserDictionary(std::error_code &ec) {
     return !ec;
 }
 
-} // namespace inputer
+} // namespace ari_ime

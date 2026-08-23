@@ -108,20 +108,20 @@ struct AriWasmEngine {
 
 namespace {
 
-inputer::KeyboardLayout layoutFromInt(int value) {
-    constexpr int first = static_cast<int>(inputer::KeyboardLayout::Default);
-    constexpr int last = static_cast<int>(inputer::KeyboardLayout::Colemak);
+ari_ime::KeyboardLayout layoutFromInt(int value) {
+    constexpr int first = static_cast<int>(ari_ime::KeyboardLayout::Default);
+    constexpr int last = static_cast<int>(ari_ime::KeyboardLayout::Colemak);
     value = std::clamp(value, first, last);
-    return static_cast<inputer::KeyboardLayout>(value);
+    return static_cast<ari_ime::KeyboardLayout>(value);
 }
 
-inputer::ChinesePunctuationShortcut punctuationShortcutFromInt(int value) {
+ari_ime::ChinesePunctuationShortcut punctuationShortcutFromInt(int value) {
     constexpr int first = static_cast<int>(
-        inputer::ChinesePunctuationShortcut::ControlShift);
+        ari_ime::ChinesePunctuationShortcut::ControlShift);
     constexpr int last = static_cast<int>(
-        inputer::ChinesePunctuationShortcut::Disabled);
+        ari_ime::ChinesePunctuationShortcut::Disabled);
     value = std::clamp(value, first, last);
-    return static_cast<inputer::ChinesePunctuationShortcut>(value);
+    return static_cast<ari_ime::ChinesePunctuationShortcut>(value);
 }
 
 const char *invalidEngine() {
@@ -130,101 +130,138 @@ const char *invalidEngine() {
     return result;
 }
 
+// Emscripten builds disable exception unwinding by default, so a throw
+// already traps fail-stop. The guards below keep the C ABI safe as well if
+// -fexceptions is ever enabled for JS interop debugging: no exception may
+// unwind into JS frames.
+template <typename Fn>
+const char *guardedJson(Fn &&fn) {
+    try {
+        return fn();
+    } catch (...) {
+        return invalidEngine();
+    }
+}
+
 } // namespace
 
 extern "C" {
 
-AriWasmEngine *ari_engine_create() {
-    return new AriWasmEngine();
-}
+AriWasmEngine *ari_engine_create() { return new AriWasmEngine(); }
 
-void ari_engine_destroy(AriWasmEngine *engine) {
-    delete engine;
-}
+void ari_engine_destroy(AriWasmEngine *engine) { delete engine; }
 
 const char *ari_engine_state_json(AriWasmEngine *engine) {
-    return engine ? engine->json.c_str() : invalidEngine();
+    return guardedJson([&] {
+        return engine ? engine->json.c_str() : invalidEngine();
+    });
 }
 
 const char *ari_engine_handle_key_json(AriWasmEngine *engine,
                                        std::uint32_t keySym,
                                        std::uint32_t modifiers) {
-    if (!engine) {
-        return invalidEngine();
-    }
-    const KeyResult result = engine->buffer.handleKey(
-        fcitx::Key(keySym, fcitx::KeyStates(modifiers)));
-    engine->publish(result);
-    return engine->json.c_str();
+    return guardedJson([&] {
+        if (!engine) {
+            return invalidEngine();
+        }
+        const KeyResult result = engine->buffer.handleKey(
+            fcitx::Key(keySym, fcitx::KeyStates(modifiers)));
+        engine->publish(result);
+        return engine->json.c_str();
+    });
 }
 
 const char *ari_engine_select_candidate_json(AriWasmEngine *engine,
                                              int pageIndex) {
-    if (!engine) {
-        return invalidEngine();
-    }
-    engine->publish(engine->buffer.selectCandidate(pageIndex));
-    return engine->json.c_str();
+    return guardedJson([&] {
+        if (!engine) {
+            return invalidEngine();
+        }
+        engine->publish(engine->buffer.selectCandidate(pageIndex));
+        return engine->json.c_str();
+    });
 }
 
 const char *ari_engine_paste_utf8_json(AriWasmEngine *engine,
                                        const char *text) {
-    if (!engine) {
-        return invalidEngine();
-    }
-    engine->buffer.pasteAtCaret(text ? text : "");
-    engine->publish({true, false, {}, true});
-    return engine->json.c_str();
+    return guardedJson([&] {
+        if (!engine) {
+            return invalidEngine();
+        }
+        engine->buffer.pasteAtCaret(text ? text : "");
+        engine->publish({true, false, {}, true});
+        return engine->json.c_str();
+    });
 }
 
 const char *ari_engine_reconvert_utf8_json(AriWasmEngine *engine,
                                            const char *text) {
-    if (!engine) {
-        return invalidEngine();
-    }
-    engine->publish(engine->buffer.beginReconversion(text ? text : ""));
-    return engine->json.c_str();
+    return guardedJson([&] {
+        if (!engine) {
+            return invalidEngine();
+        }
+        engine->publish(engine->buffer.beginReconversion(text ? text : ""));
+        return engine->json.c_str();
+    });
 }
 
 const char *ari_engine_reset_json(AriWasmEngine *engine) {
-    if (!engine) {
-        return invalidEngine();
-    }
-    engine->buffer.reset();
-    engine->publish({true, false, {}, true});
-    return engine->json.c_str();
+    return guardedJson([&] {
+        if (!engine) {
+            return invalidEngine();
+        }
+        engine->buffer.reset();
+        engine->publish({true, false, {}, true});
+        return engine->json.c_str();
+    });
 }
 
 void ari_engine_set_learning_allowed(AriWasmEngine *engine, int allowed) {
-    if (engine) {
-        engine->buffer.setLearningAllowed(allowed != 0);
+    try {
+        if (engine) {
+            engine->buffer.setLearningAllowed(allowed != 0);
+        }
+    } catch (...) {
     }
 }
 
 int ari_engine_set_keyboard_layout(AriWasmEngine *engine, int layout) {
-    if (!engine) {
+    try {
+        if (!engine) {
+            return 0;
+        }
+        return engine->buffer.setKeyboardLayout(layoutFromInt(layout)) ? 1 : 0;
+    } catch (...) {
         return 0;
     }
-    return engine->buffer.setKeyboardLayout(layoutFromInt(layout)) ? 1 : 0;
 }
 
 void ari_engine_set_full_width_punctuation(AriWasmEngine *engine,
                                            int enabled) {
-    if (engine) {
-        engine->buffer.setFullWidthPunct(enabled != 0);
+    try {
+        if (engine) {
+            engine->buffer.setFullWidthPunct(enabled != 0);
+        }
+    } catch (...) {
     }
 }
 
 void ari_engine_set_punctuation_shortcut(AriWasmEngine *engine, int shortcut) {
-    if (engine) {
-        engine->buffer.setChinesePunctuationShortcut(
-            punctuationShortcutFromInt(shortcut));
+    try {
+        if (engine) {
+            engine->buffer.setChinesePunctuationShortcut(
+                punctuationShortcutFromInt(shortcut));
+        }
+    } catch (...) {
     }
 }
 
 void ari_engine_set_space_candidate_mode(AriWasmEngine *engine, int enabled) {
-    if (engine) {
-        engine->buffer.setSpaceCandidateMode(enabled != 0);
+    try {
+        if (engine) {
+            engine->buffer.setSpaceCandidateMode(enabled != 0);
+        }
+    } catch (...) {
     }
 }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#include "inputer.h"
+#include "ari_ime.h"
 
 #include <algorithm>
 #include <functional>
@@ -26,9 +26,9 @@ namespace {
 
 // Display-only candidate; selection is driven from keyEvent so the visible
 // highlight tracks our own ↑/↓ navigation.
-class InputerCandidate : public fcitx::CandidateWord {
+class AriImeCandidate : public fcitx::CandidateWord {
 public:
-    explicit InputerCandidate(
+    explicit AriImeCandidate(
         const std::string &text, bool highlighted,
         std::function<void(fcitx::InputContext *)> onSelect)
         : onSelect_(std::move(onSelect)) {
@@ -48,11 +48,11 @@ private:
 
 // Byte offset where the `n`-th grapheme cluster (0-based) starts.
 std::size_t utf8Offset(const std::string &s, int n) {
-    return inputer::unicode::graphemeOffset(s, n);
+    return ari_ime::unicode::graphemeOffset(s, n);
 }
 
 std::vector<std::string> utf8Chars(const std::string &s) {
-    return inputer::unicode::splitGraphemes(s);
+    return ari_ime::unicode::splitGraphemes(s);
 }
 
 fcitx::Text buildEditingPreview(const std::string &text, int position,
@@ -103,9 +103,9 @@ std::string joinAuxParts(const std::vector<std::string> &parts) {
     return out;
 }
 
-void showInputerInformation(fcitx::Instance *instance, fcitx::InputContext *ic,
+void showAriImeInformation(fcitx::Instance *instance, fcitx::InputContext *ic,
                             const std::string &message) {
-#ifdef INPUTER_HAVE_CUSTOM_INPUT_METHOD_INFORMATION
+#ifdef ARI_IME_HAVE_CUSTOM_INPUT_METHOD_INFORMATION
     instance->showCustomInputMethodInformation(ic, message);
 #else
     (void)message;
@@ -136,7 +136,7 @@ fcitx::Text buildPreedit(const std::string &text, int caret) {
 std::string statusText(const Buffer &buffer) {
     std::string out = buffer.isForcedEnglish() ? "英" : "中";
     out += " · ";
-    out += inputer::keyboardLayoutName(buffer.keyboardLayout());
+    out += ari_ime::keyboardLayoutName(buffer.keyboardLayout());
     out += " · ";
     out += buffer.isFullWidthPunct() ? "全形標點" : "半形標點";
     return out;
@@ -161,23 +161,23 @@ void setPreedit(fcitx::InputContext *ic, fcitx::Text preedit) {
 
 } // namespace
 
-InputerEngine::InputerEngine(fcitx::Instance *instance)
+AriImeEngine::AriImeEngine(fcitx::Instance *instance)
     : instance_(instance),
-      factory_([](fcitx::InputContext &) { return new InputerState(); }) {
-    instance_->inputContextManager().registerProperty("inputerState", &factory_);
+      factory_([](fcitx::InputContext &) { return new AriImeState(); }) {
+    instance_->inputContextManager().registerProperty("ari_imeState", &factory_);
     reloadConfig();
 }
 
-inputer::KeyboardLayout InputerEngine::applyConfig() {
-    inputer::KeyboardLayout layout = *config_.keyboardLayout;
-    if (!inputer::keyboardLayoutAvailable(layout)) {
-        layout = inputer::KeyboardLayout::Default;
+ari_ime::KeyboardLayout AriImeEngine::applyConfig() {
+    ari_ime::KeyboardLayout layout = *config_.keyboardLayout;
+    if (!ari_ime::keyboardLayoutAvailable(layout)) {
+        layout = ari_ime::KeyboardLayout::Default;
     }
-    inputer::setCurrentKeyboardLayout(layout);
+    ari_ime::setCurrentKeyboardLayout(layout);
     return layout;
 }
 
-void InputerEngine::updateUI(fcitx::InputContext *ic, Buffer &buffer) {
+void AriImeEngine::updateUI(fcitx::InputContext *ic, Buffer &buffer) {
     auto &panel = ic->inputPanel();
     panel.reset();
 
@@ -197,6 +197,13 @@ void InputerEngine::updateUI(fcitx::InputContext *ic, Buffer &buffer) {
         const int position = buffer.isPicking() ? selChar : caretChar;
         panel.setAuxUp(
             buildEditingPreview(preeditStr, position, buffer.isPicking()));
+    } else if (*config_.showPendingZhuyin) {
+        // While an incomplete bopomofo syllable is pending, show its symbols
+        // in Fcitx5's own auxiliary panel above the caret.
+        const std::string hint = buffer.pendingSyllableHint();
+        if (!hint.empty()) {
+            panel.setAuxUp(fcitx::Text(hint));
+        }
     }
 
     const int totalChars = utf8Count(preeditStr);
@@ -214,17 +221,17 @@ void InputerEngine::updateUI(fcitx::InputContext *ic, Buffer &buffer) {
     auto candidates = buffer.candidates();
     if (!candidates.empty()) {
         auto list = std::make_unique<fcitx::CommonCandidateList>();
-        list->setPageSize(inputer::kCandPerPage);
+        list->setPageSize(ari_ime::kCandPerPage);
         list->setLayoutHint(fcitx::CandidateLayoutHint::Vertical);
         fcitx::KeyList selectionKeys;
-        for (int i = 0; i < inputer::kCandPerPage; ++i) {
+        for (int i = 0; i < ari_ime::kCandPerPage; ++i) {
             selectionKeys.emplace_back(static_cast<fcitx::KeySym>(FcitxKey_1 + i));
         }
         list->setSelectionKey(selectionKeys);
         int hl = buffer.highlight();
         for (int i = 0; i < static_cast<int>(candidates.size()); ++i) {
             const std::string candidateText = candidates[i];
-            list->append(std::make_unique<InputerCandidate>(
+            list->append(std::make_unique<AriImeCandidate>(
                 candidateText, i == hl,
                 [this, i, candidateText](fcitx::InputContext *ic) {
                     auto *state = ic->propertyFor(&factory_);
@@ -268,7 +275,7 @@ void InputerEngine::updateUI(fcitx::InputContext *ic, Buffer &buffer) {
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
 }
 
-std::string InputerEngine::clipboardText(fcitx::InputContext *ic) {
+std::string AriImeEngine::clipboardText(fcitx::InputContext *ic) {
     auto *clipboard = instance_->addonManager().addon("clipboard", /*load=*/true);
     if (!clipboard) {
         return {}; // clipboard module unavailable: silently fall back
@@ -276,8 +283,8 @@ std::string InputerEngine::clipboardText(fcitx::InputContext *ic) {
     return clipboard->call<fcitx::IClipboard::clipboard>(ic);
 }
 
-bool InputerEngine::beginReconversion(fcitx::InputContext *ic,
-                                      InputerState &state) {
+bool AriImeEngine::beginReconversion(fcitx::InputContext *ic,
+                                      AriImeState &state) {
     if (state.reconversionActive || state.buffer.isForcedEnglish() ||
         !state.buffer.preeditText().empty() ||
         !ic->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText) ||
@@ -316,25 +323,25 @@ bool InputerEngine::beginReconversion(fcitx::InputContext *ic,
     return true;
 }
 
-void InputerEngine::applyResult(fcitx::InputContext *ic, Buffer &buffer,
+void AriImeEngine::applyResult(fcitx::InputContext *ic, Buffer &buffer,
                                 const KeyResult &result) {
     if (result.hasCommit && !result.commitText.empty()) {
         ic->commitString(result.commitText);
     }
     if (result.notifyMode) {
-        showInputerInformation(
+        showAriImeInformation(
             instance_,
             ic, buffer.isForcedEnglish() ? "英 English" : "中 中文");
     }
     if (!result.notification.empty()) {
-        showInputerInformation(instance_, ic, result.notification);
+        showAriImeInformation(instance_, ic, result.notification);
     }
     if (result.updateUI) {
         updateUI(ic, buffer);
     }
 }
 
-void InputerEngine::keyEvent(const fcitx::InputMethodEntry &,
+void AriImeEngine::keyEvent(const fcitx::InputMethodEntry &,
                              fcitx::KeyEvent &keyEvent) {
     if (keyEvent.isRelease()) {
         return;
@@ -350,14 +357,14 @@ void InputerEngine::keyEvent(const fcitx::InputMethodEntry &,
     // the buffer's plain-English degrade path, so we do not swallow the event.
     if (!state->buffer.engineReady() && !state->engineErrorNotified) {
         state->engineErrorNotified = true;
-        showInputerInformation(
+        showAriImeInformation(
             instance_,
             ic, "注音引擎載入失敗，暫以英文輸入");
     }
 
     // Apply current config (cheap + idempotent) so toggling it in configtool
     // takes effect on every context without per-state bookkeeping.
-    inputer::KeyboardLayout layout = applyConfig();
+    ari_ime::KeyboardLayout layout = applyConfig();
     bool layoutChanged = state->buffer.setKeyboardLayout(layout);
     bool punctChanged =
         state->buffer.setFullWidthPunct(*config_.fullWidthPunctuation);
@@ -366,15 +373,15 @@ void InputerEngine::keyEvent(const fcitx::InputMethodEntry &,
     state->buffer.setSpaceCandidateMode(*config_.spaceCandidateMode);
     if (layoutChanged) {
         std::string message =
-            std::string("鍵盤 ") + inputer::keyboardLayoutName(layout);
+            std::string("鍵盤 ") + ari_ime::keyboardLayoutName(layout);
         if (layout != *config_.keyboardLayout) {
             message += " (設定不可用，已退回)";
         }
-        showInputerInformation(instance_, ic, message);
+        showAriImeInformation(instance_, ic, message);
         updateUI(ic, state->buffer);
     }
     if (punctChanged) {
-        showInputerInformation(
+        showAriImeInformation(
             instance_,
             ic, state->buffer.isFullWidthPunct() ? "標點 全形" : "標點 半形");
         updateUI(ic, state->buffer);
@@ -388,9 +395,9 @@ void InputerEngine::keyEvent(const fcitx::InputMethodEntry &,
             *config_.fullWidthPunctuationToggle)) {
         bool on = !*config_.fullWidthPunctuation;
         config_.fullWidthPunctuation.setValue(on);
-        fcitx::safeSaveAsIni(config_, "conf/inputer.conf");
+        fcitx::safeSaveAsIni(config_, "conf/ari-ime.conf");
         state->buffer.setFullWidthPunct(on);
-        showInputerInformation(instance_, ic,
+        showAriImeInformation(instance_, ic,
                                on ? "標點 全形" : "標點 半形");
         updateUI(ic, state->buffer);
         keyEvent.filterAndAccept();
@@ -446,7 +453,7 @@ void InputerEngine::keyEvent(const fcitx::InputMethodEntry &,
     }
 }
 
-void InputerEngine::reset(const fcitx::InputMethodEntry &,
+void AriImeEngine::reset(const fcitx::InputMethodEntry &,
                           fcitx::InputContextEvent &event) {
     auto *ic = event.inputContext();
     auto *state = ic->propertyFor(&factory_);
@@ -463,4 +470,4 @@ void InputerEngine::reset(const fcitx::InputMethodEntry &,
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
 }
 
-FCITX_ADDON_FACTORY(InputerEngineFactory);
+FCITX_ADDON_FACTORY(AriImeEngineFactory);

@@ -49,7 +49,7 @@ NSUInteger utf16Offset(const std::string &text, int graphemeIndex) {
     if (graphemeIndex < 0) {
         return toNSString(text).length;
     }
-    const std::size_t bytes = inputer::unicode::graphemeOffset(text, graphemeIndex);
+    const std::size_t bytes = ari_ime::unicode::graphemeOffset(text, graphemeIndex);
     return toNSString(text.substr(0, bytes)).length;
 }
 
@@ -518,13 +518,13 @@ NSString *const kAutoLearnKey = @"AutoLearn";
 NSString *const kPerAppModeKey = @"PerApplicationEnglishMode";
 NSString *const kEnglishAutoCommitKey = @"EnglishAutoCommit";
 
-constexpr inputer::KeyboardLayout kLayouts[] = {
-    inputer::KeyboardLayout::Default,       inputer::KeyboardLayout::Eten,
-    inputer::KeyboardLayout::Hsu,           inputer::KeyboardLayout::Ibm,
-    inputer::KeyboardLayout::GinYieh,       inputer::KeyboardLayout::Dvorak,
-    inputer::KeyboardLayout::Carpalx,       inputer::KeyboardLayout::ColemakDhAnsi,
-    inputer::KeyboardLayout::ColemakDhOrth, inputer::KeyboardLayout::Workman,
-    inputer::KeyboardLayout::Colemak,
+constexpr ari_ime::KeyboardLayout kLayouts[] = {
+    ari_ime::KeyboardLayout::Default,       ari_ime::KeyboardLayout::Eten,
+    ari_ime::KeyboardLayout::Hsu,           ari_ime::KeyboardLayout::Ibm,
+    ari_ime::KeyboardLayout::GinYieh,       ari_ime::KeyboardLayout::Dvorak,
+    ari_ime::KeyboardLayout::Carpalx,       ari_ime::KeyboardLayout::ColemakDhAnsi,
+    ari_ime::KeyboardLayout::ColemakDhOrth, ari_ime::KeyboardLayout::Workman,
+    ari_ime::KeyboardLayout::Colemak,
 };
 
 // The Fcitx5 build reads these from layout.h's i18n annotations, which the
@@ -578,12 +578,12 @@ NSMenuItem *menuItemFrom(id sender) {
     [defaults registerDefaults:@{kAutoLearnKey : @YES}];
 
     const NSInteger layoutIndex = [defaults integerForKey:kLayoutKey];
-    inputer::KeyboardLayout layout =
+    ari_ime::KeyboardLayout layout =
         (layoutIndex >= 0 && layoutIndex < (NSInteger)std::size(kLayouts))
             ? kLayouts[layoutIndex]
-            : inputer::KeyboardLayout::Default;
-    if (!inputer::keyboardLayoutAvailable(layout)) {
-        layout = inputer::KeyboardLayout::Default;
+            : ari_ime::KeyboardLayout::Default;
+    if (!ari_ime::keyboardLayoutAvailable(layout)) {
+        layout = ari_ime::KeyboardLayout::Default;
     }
     // Note this resets the pre-edit and writes process-global state, so every
     // controller reapplies it when it becomes active.
@@ -598,9 +598,9 @@ NSMenuItem *menuItemFrom(id sender) {
         [defaults integerForKey:kPunctuationShortcutKey];
     _buffer.setChinesePunctuationShortcut(
         (shortcutIndex >= 0 &&
-         shortcutIndex <= (NSInteger)inputer::ChinesePunctuationShortcut::Disabled)
-            ? static_cast<inputer::ChinesePunctuationShortcut>(shortcutIndex)
-            : inputer::ChinesePunctuationShortcut::ControlShift);
+         shortcutIndex <= (NSInteger)ari_ime::ChinesePunctuationShortcut::Disabled)
+            ? static_cast<ari_ime::ChinesePunctuationShortcut>(shortcutIndex)
+            : ari_ime::ChinesePunctuationShortcut::ControlShift);
 }
 
 // Typing into a terminal is the case this exists for: a shell command held in
@@ -665,11 +665,11 @@ NSMenuItem *menuItemFrom(id sender) {
     NSMenu *layouts = [[NSMenu alloc] initWithTitle:@"鍵盤配置"];
     const NSInteger current = [defaults integerForKey:kLayoutKey];
     for (NSInteger i = 0; i < (NSInteger)std::size(kLayouts); ++i) {
-        if (!inputer::keyboardLayoutAvailable(kLayouts[i])) {
+        if (!ari_ime::keyboardLayoutAvailable(kLayouts[i])) {
             continue;
         }
         NSMenuItem *item = [[NSMenuItem alloc]
-            initWithTitle:@(inputer::keyboardLayoutName(kLayouts[i]))
+            initWithTitle:@(ari_ime::keyboardLayoutName(kLayouts[i]))
                    action:@selector(ariSelectKeyboardLayout:)
             keyEquivalent:@""];
         item.tag = i;
@@ -794,7 +794,7 @@ NSMenuItem *menuItemFrom(id sender) {
 
 - (void)ariEditTemplates:(id)sender {
     (void)sender;
-    NSString *path = @(inputer::templatesPath().c_str());
+    NSString *path = @(ari_ime::templatesPath().c_str());
     if (path.length == 0) {
         return;
     }

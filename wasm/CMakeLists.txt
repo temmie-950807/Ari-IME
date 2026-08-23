@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ari_ime_wasm LANGUAGES CXX)
+project(ari-ime-wasm LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,13 +41,13 @@ target_include_directories(ari-ime-headless
         "${ARI_SOURCE_ROOT}/src"
         "${CHEWING_INCLUDE_DIR}"
 )
-target_compile_definitions(ari-ime-headless PRIVATE INPUTER_WASM)
+target_compile_definitions(ari-ime-headless PRIVATE ARI_IME_WASM)
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     target_compile_definitions(ari-ime-headless PRIVATE
         # The reproducible WASM build uses libchewing 0.8's portable C
         # backend. That API predates chewing_ack(), so use the compatibility
         # rollover path.
-        INPUTER_LIBCHEWING_LEGACY_OUTPUT
+        ARI_IME_LIBCHEWING_LEGACY_OUTPUT
     )
 endif()
 target_compile_options(ari-ime-headless PRIVATE -Wall -Wextra -Wpedantic)
@@ -60,7 +60,7 @@ if(ARI_WASM_BUILD_NATIVE_TEST)
             "wasm/test/native_api.cpp source")
     endif()
     target_compile_definitions(ari-ime-headless
-        PRIVATE INPUTER_WASM_NATIVE_TEST)
+        PRIVATE ARI_IME_WASM_NATIVE_TEST)
     add_executable(ari-ime-wasm-native-test
         "${CMAKE_CURRENT_LIST_DIR}/api.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/test/native_api.cpp")

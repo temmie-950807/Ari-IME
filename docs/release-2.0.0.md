@@ -45,7 +45,7 @@ preedit text, and per-user learning on top of libchewing.
 
 ## Upgrade Notes
 
-- **Learned data location changed.** Learning now lands in `~/.config/inputer/`
+- **Learned data location changed.** Learning now lands in `~/.config/ari-ime/`
   rather than the shared `~/.local/share/chewing`. Personalization learned by
   earlier versions stays at the old location and is no longer used; it can be
   cleared with `scripts/reset-user-data.sh --include-shared`. New learning starts

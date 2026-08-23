@@ -4,14 +4,14 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-build_dir="${INPUTER_BUILD_DIR:-build}"
-sanitize_dir="${INPUTER_SANITIZE_BUILD_DIR:-build-sanitize}"
-fuzz_dir="${INPUTER_FUZZ_BUILD_DIR:-build-fuzz}"
-fuzz_corpus_dir="${INPUTER_FUZZ_CORPUS_DIR:-test/corpus/fuzz_buffer}"
-coverage_dir="${INPUTER_COVERAGE_BUILD_DIR:-build-coverage}"
-install_prefix="${INPUTER_INSTALL_PREFIX:-/tmp/inputer-install-check}"
-mode="${INPUTER_CHECK_MODE:-all}"
-build_type="${INPUTER_BUILD_TYPE:-Release}"
+build_dir="${ARI_IME_BUILD_DIR:-build}"
+sanitize_dir="${ARI_IME_SANITIZE_BUILD_DIR:-build-sanitize}"
+fuzz_dir="${ARI_IME_FUZZ_BUILD_DIR:-build-fuzz}"
+fuzz_corpus_dir="${ARI_IME_FUZZ_CORPUS_DIR:-test/corpus/fuzz_buffer}"
+coverage_dir="${ARI_IME_COVERAGE_BUILD_DIR:-build-coverage}"
+install_prefix="${ARI_IME_INSTALL_PREFIX:-/tmp/ari-ime-install-check}"
+mode="${ARI_IME_CHECK_MODE:-all}"
+build_type="${ARI_IME_BUILD_TYPE:-Release}"
 
 run() {
     printf '\n==> %s\n' "$*"
@@ -27,19 +27,19 @@ local_tests_available() {
 }
 
 cmake_compiler_args() {
-    if [[ -n "${INPUTER_CC:-}" ]]; then
-        printf '%s\n' "-DCMAKE_C_COMPILER=$INPUTER_CC"
+    if [[ -n "${ARI_IME_CC:-}" ]]; then
+        printf '%s\n' "-DCMAKE_C_COMPILER=$ARI_IME_CC"
     fi
-    if [[ -n "${INPUTER_CXX:-}" ]]; then
-        printf '%s\n' "-DCMAKE_CXX_COMPILER=$INPUTER_CXX"
+    if [[ -n "${ARI_IME_CXX:-}" ]]; then
+        printf '%s\n' "-DCMAKE_CXX_COMPILER=$ARI_IME_CXX"
     fi
-    if [[ -n "${INPUTER_CXX_COMPILER_LAUNCHER:-}" ]]; then
-        printf '%s\n' "-DCMAKE_CXX_COMPILER_LAUNCHER=$INPUTER_CXX_COMPILER_LAUNCHER"
+    if [[ -n "${ARI_IME_CXX_COMPILER_LAUNCHER:-}" ]]; then
+        printf '%s\n' "-DCMAKE_CXX_COMPILER_LAUNCHER=$ARI_IME_CXX_COMPILER_LAUNCHER"
     fi
 }
 
 extract_cmake_version() {
-    sed -n 's/^project(inputer VERSION \([^ ]*\) LANGUAGES CXX).*/\1/p' CMakeLists.txt
+    sed -n 's/^project(ari-ime VERSION \([^ ]*\) LANGUAGES CXX).*/\1/p' CMakeLists.txt
 }
 
 extract_pkgbuild_version() {
@@ -102,8 +102,8 @@ print_dependency_versions() {
     if command -v cmake >/dev/null 2>&1; then
         printf 'CMake version: %s\n' "$(cmake --version | sed -n '1s/^cmake version //p')"
     fi
-    if command -v "${INPUTER_CXX:-c++}" >/dev/null 2>&1; then
-        printf 'C++ compiler: %s\n' "$("${INPUTER_CXX:-c++}" --version | sed -n '1p')"
+    if command -v "${ARI_IME_CXX:-c++}" >/dev/null 2>&1; then
+        printf 'C++ compiler: %s\n' "$("${ARI_IME_CXX:-c++}" --version | sed -n '1p')"
     fi
 }
 
@@ -122,7 +122,7 @@ check_srcinfo() {
         if [[ "$(id -u)" -eq 0 ]]; then
             if command -v runuser >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
                 local srcinfo_dir status
-                srcinfo_dir="$(mktemp -d /tmp/inputer-srcinfo-work-XXXXXX)"
+                srcinfo_dir="$(mktemp -d /tmp/ari-ime-srcinfo-work-XXXXXX)"
                 cp PKGBUILD "$srcinfo_dir/PKGBUILD"
                 chown nobody:nobody "$srcinfo_dir" "$srcinfo_dir/PKGBUILD"
                 if (cd "$srcinfo_dir" &&
@@ -136,7 +136,7 @@ check_srcinfo() {
             fi
             if command -v su >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
                 local srcinfo_dir status
-                srcinfo_dir="$(mktemp -d /tmp/inputer-srcinfo-work-XXXXXX)"
+                srcinfo_dir="$(mktemp -d /tmp/ari-ime-srcinfo-work-XXXXXX)"
                 cp PKGBUILD "$srcinfo_dir/PKGBUILD"
                 chown nobody:nobody "$srcinfo_dir" "$srcinfo_dir/PKGBUILD"
                 if (cd "$srcinfo_dir" &&
@@ -156,8 +156,12 @@ check_srcinfo() {
 
     if [[ -f .SRCINFO ]]; then
         local srcinfo_tmp
-        srcinfo_tmp="$(mktemp /tmp/inputer-srcinfo-XXXXXX)"
-        print_srcinfo >"$srcinfo_tmp"
+        srcinfo_tmp="$(mktemp /tmp/ari-ime-srcinfo-XXXXXX)"
+        if ! print_srcinfo >"$srcinfo_tmp"; then
+            rm -f "$srcinfo_tmp"
+            printf 'Failed to regenerate .SRCINFO\n' >&2
+            exit 1
+        fi
         set +e
         run diff -u .SRCINFO "$srcinfo_tmp"
         local status=$?
@@ -183,22 +187,22 @@ release_checks() {
         -DCMAKE_BUILD_TYPE="$build_type" -DBUILD_TESTING="$build_testing"
     run cmake --build "$build_dir"
     if [[ "$build_testing" == ON ]]; then
-        run ctest --test-dir "$build_dir" -j"${INPUTER_TEST_JOBS:-2}" --output-on-failure
+        run ctest --test-dir "$build_dir" -j"${ARI_IME_TEST_JOBS:-2}" --output-on-failure
     else
         printf 'Skipping local tests: maintainer-only test sources are absent\n'
     fi
     run cmake --install "$build_dir" --prefix "$install_prefix"
     local installed_module
     installed_module="$(find "$install_prefix" -type f \
-        -path '*/fcitx5/inputer.so' -print -quit)"
+        -path '*/fcitx5/ari-ime.so' -print -quit)"
     run test -n "$installed_module"
     run test -s "$installed_module"
     run grep -q '^Configurable=True$' \
-        "$install_prefix/share/fcitx5/inputmethod/inputer.conf"
+        "$install_prefix/share/fcitx5/inputmethod/ari-ime.conf"
     run grep -q '^Configurable=True$' \
-        "$install_prefix/share/fcitx5/addon/inputer.conf"
+        "$install_prefix/share/fcitx5/addon/ari-ime.conf"
     run grep -q '^OnDemand=True$' \
-        "$install_prefix/share/fcitx5/addon/inputer.conf"
+        "$install_prefix/share/fcitx5/addon/ari-ime.conf"
     run test -x "$install_prefix/bin/ari-ime-enable"
     run test -x "$install_prefix/bin/ari-ime-reset-data"
     run test -x "$install_prefix/bin/ari-ime-dict"
@@ -223,11 +227,11 @@ sanitize_checks() {
     run cmake -S . -B "$sanitize_dir" \
         "${cmake_args[@]}" \
         -DCMAKE_BUILD_TYPE=Debug \
-        -DINPUTER_ENABLE_SANITIZERS=ON \
+        -DARI_IME_ENABLE_SANITIZERS=ON \
         -DBUILD_TESTING="$build_testing"
     run cmake --build "$sanitize_dir"
     if [[ "$build_testing" == ON ]]; then
-        run ctest --test-dir "$sanitize_dir" -j"${INPUTER_TEST_JOBS:-2}" --output-on-failure
+        run ctest --test-dir "$sanitize_dir" -j"${ARI_IME_TEST_JOBS:-2}" --output-on-failure
     else
         printf 'Skipping sanitizer tests: maintainer-only test sources are absent\n'
     fi
@@ -240,11 +244,11 @@ fuzz_checks() {
     fi
     print_dependency_versions
     if ! command -v clang++ >/dev/null 2>&1; then
-        if [[ "${INPUTER_FUZZ_ALLOW_SKIP:-0}" == "1" ]]; then
+        if [[ "${ARI_IME_FUZZ_ALLOW_SKIP:-0}" == "1" ]]; then
             printf 'Skipping fuzz checks: clang++ not found\n'
             return
         fi
-        printf 'clang++ is required for INPUTER_CHECK_MODE=fuzz\n' >&2
+        printf 'clang++ is required for ARI_IME_CHECK_MODE=fuzz\n' >&2
         exit 1
     fi
 
@@ -254,17 +258,17 @@ fuzz_checks() {
         "${cmake_args[@]}" \
         -DCMAKE_CXX_COMPILER=clang++ \
         -DCMAKE_BUILD_TYPE=Debug \
-        -DINPUTER_ENABLE_FUZZING=ON \
+        -DARI_IME_ENABLE_FUZZING=ON \
         -DBUILD_TESTING=OFF
     run cmake --build "$fuzz_dir" --target fuzz_buffer
-    local fuzz_args=("-runs=${INPUTER_FUZZ_RUNS:-256}")
-    if [[ -n "${INPUTER_FUZZ_ARTIFACT_DIR:-}" ]]; then
-        mkdir -p "$INPUTER_FUZZ_ARTIFACT_DIR"
-        fuzz_args+=("-artifact_prefix=${INPUTER_FUZZ_ARTIFACT_DIR%/}/")
+    local fuzz_args=("-runs=${ARI_IME_FUZZ_RUNS:-256}")
+    if [[ -n "${ARI_IME_FUZZ_ARTIFACT_DIR:-}" ]]; then
+        mkdir -p "$ARI_IME_FUZZ_ARTIFACT_DIR"
+        fuzz_args+=("-artifact_prefix=${ARI_IME_FUZZ_ARTIFACT_DIR%/}/")
     fi
     local fuzz_work_dir=""
     if [[ -d "$fuzz_corpus_dir" ]]; then
-        fuzz_work_dir="$(mktemp -d /tmp/inputer-fuzz-corpus-XXXXXX)"
+        fuzz_work_dir="$(mktemp -d /tmp/ari-ime-fuzz-corpus-XXXXXX)"
         cp -a "$fuzz_corpus_dir"/. "$fuzz_work_dir"/
         fuzz_args+=("$fuzz_work_dir")
     fi
@@ -282,7 +286,7 @@ coverage_checks() {
     fi
     print_dependency_versions
     if ! command -v gcov >/dev/null 2>&1; then
-        printf 'gcov is required for INPUTER_CHECK_MODE=coverage\n' >&2
+        printf 'gcov is required for ARI_IME_CHECK_MODE=coverage\n' >&2
         exit 1
     fi
 
@@ -291,10 +295,10 @@ coverage_checks() {
     run cmake -S . -B "$coverage_dir" \
         "${cmake_args[@]}" \
         -DCMAKE_BUILD_TYPE=Debug \
-        -DINPUTER_ENABLE_COVERAGE=ON \
+        -DARI_IME_ENABLE_COVERAGE=ON \
         -DBUILD_TESTING=ON
     run cmake --build "$coverage_dir"
-    run ctest --test-dir "$coverage_dir" -j"${INPUTER_TEST_JOBS:-2}" --output-on-failure
+    run ctest --test-dir "$coverage_dir" -j"${ARI_IME_TEST_JOBS:-2}" --output-on-failure
 
     local report_dir="$coverage_dir/gcov"
     mkdir -p "$report_dir"
@@ -316,7 +320,7 @@ package_checks() {
     print_dependency_versions
     local pkgbuild_version
     pkgbuild_version="$(extract_pkgbuild_version)"
-    tmp="$(mktemp -d /tmp/inputer-pkgcheck-XXXXXX)"
+    tmp="$(mktemp -d /tmp/ari-ime-pkgcheck-XXXXXX)"
     trap 'rm -rf "$tmp"' EXIT
     mkdir -p "$tmp/Ari-IME-$pkgbuild_version"
     local package_sources=(CMakeLists.txt LICENSE README.md data scripts src)
@@ -332,7 +336,7 @@ case "$mode" in
 all)
     release_checks
     sanitize_checks
-    if [[ "${INPUTER_CHECK_PACKAGE:-0}" == "1" ]]; then
+    if [[ "${ARI_IME_CHECK_PACKAGE:-0}" == "1" ]]; then
         package_checks
     fi
     ;;
@@ -353,7 +357,7 @@ package)
     package_checks
     ;;
 *)
-    printf 'Unknown INPUTER_CHECK_MODE: %s\n' "$mode" >&2
+    printf 'Unknown ARI_IME_CHECK_MODE: %s\n' "$mode" >&2
     exit 2
     ;;
 esac

@@ -13,7 +13,7 @@
 
 #include <chewing.h>
 
-namespace inputer {
+namespace ari_ime {
 namespace {
 
 // Slot probing needs no user dictionary. Suppress libchewing's expected
@@ -65,7 +65,7 @@ std::array<int8_t, 128> buildSlots(KeyboardLayout layout) {
     slots.fill(kNoZhuyinSlot);
 
     ChewingContext *ctx =
-#ifdef INPUTER_WASM
+#ifdef ARI_IME_WASM
         chewing_new2("/usr/share/libchewing", nullptr, quietChewingLogger,
                      nullptr);
 #else
@@ -85,6 +85,11 @@ std::array<int8_t, 128> buildSlots(KeyboardLayout layout) {
         // releases that preserve it.
         chewing_set_KBType(ctx, chewingKeyboardType(layout));
         chewing_handle_Default(ctx, c);
+        // chewing_bopomofo_String_static is only valid right after a true
+        // chewing_bopomofo_Check per the documented contract.
+        if (chewing_bopomofo_Check(ctx) != 1) {
+            continue;
+        }
         if (const char *bpmf = chewing_bopomofo_String_static(ctx);
             bpmf && *bpmf) {
             slots[static_cast<unsigned char>(foldBopomofoKey(
@@ -99,7 +104,10 @@ bool isDualRoleToneKey(KeyboardLayout layout, char c) {
     c = foldBopomofoKey(c);
     switch (layout) {
     case KeyboardLayout::Hsu:
-        return c == 'd' || c == 'f' || c == 'j';
+        // libchewing's KB_HSU completes a syllable with d=2聲 f=3聲 j=4聲 and
+        // s=輕聲 after the body; leaving 's' out made 輕聲 fall through to the
+        // literal English path.
+        return c == 'd' || c == 'f' || c == 'j' || c == 's';
     case KeyboardLayout::Default:
     case KeyboardLayout::Eten:
     case KeyboardLayout::Ibm:
@@ -482,4 +490,4 @@ syllableKeySequences(KeyboardLayout layout) {
     return result;
 }
 
-} // namespace inputer
+} // namespace ari_ime

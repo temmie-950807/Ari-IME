@@ -5,11 +5,11 @@
 
 #include <filesystem>
 
-namespace inputer {
+namespace ari_ime {
 namespace {
 
 std::filesystem::path dataDir() {
-#ifdef INPUTER_WASM_NATIVE_TEST
+#ifdef ARI_IME_WASM_NATIVE_TEST
     return std::filesystem::temp_directory_path() / "ari-ime-wasm-native";
 #else
     // Emscripten's MEMFS keeps this state in the module instance. A host can
@@ -52,4 +52,4 @@ bool resetUserDictionary(std::error_code &ec) {
     return true;
 }
 
-} // namespace inputer
+} // namespace ari_ime

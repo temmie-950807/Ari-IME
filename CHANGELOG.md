@@ -1,5 +1,80 @@
 # Changelog
 
+## 2.6.1 - 2026-08-23
+
+Packaging and identity release for the Ari IME rename. Typing behavior is
+unchanged.
+
+- Replace the legacy internal identifier everywhere with `ari-ime`, including
+  the Fcitx5 addon, input method descriptor, shared
+  library, icon, helper commands, CMake targets, and release package names.
+- Keep the KDE/Fcitx5 display name as `Ari IME`; only the machine-facing ID is
+  `ari-ime`, so the installed input method is no longer presented under the
+  old project folder name.
+- Move Ari-owned user data and environment variables to the `ari-ime` names,
+  and synchronize the native release and `@ari-ime/wasm` package at 2.6.1.
+- Existing learned data from the previous user-data directory is not migrated
+  automatically because the old identifier is intentionally removed.
+
+## 2.6.0 - 2026-08-23
+
+Hardening release from a full code audit of the engine, tooling, and
+packaging scripts. Everyday typing behavior is unchanged apart from the
+fixes below; the full regression suite passes.
+
+- Recognize `s` as the Hsu-layout neutral-tone key: 輕聲 syllables now convert
+  instead of falling through to literal English.
+- Keep full-width punctuation conversion away from 注音 keys: keypad `/ - . ,`
+  and invalid-syllable extension keys no longer emit stray Bopomofo glyphs
+  under FullWidthPunctuation.
+- Clear stale candidate lists when reinterpreting an English cell or exploding
+  a character back to raw keys, preventing a phantom candidate window wired to
+  an outdated cell from writing into the wrong place.
+- Paste path now drops clipboard clusters that are not well-formed UTF-8 and
+  folds C1 controls into separators instead of committing broken bytes.
+- ZWJ no longer glues plain ASCII neighbors into one cluster; real emoji
+  sequences are unaffected.
+- Cached per-character readings are cleared on keyboard-layout changes so
+  reconversion never re-feeds old readings through the new layout; reading
+  cache eviction is now FIFO rather than an arbitrary unordered_map element.
+- ari-ime-dict: reject non-canonical readings per line before an import
+  touches the dictionary, tolerate a leading UTF-8 BOM, include the line
+  number when libchewing rejects an entry, and write file exports through a
+  temporary file so a failed export cannot truncate an existing destination.
+- Scripts: resolve symlinked Fcitx5 profiles instead of overwriting the link,
+  make reset backups collision-proof with pid-suffixed stamps and `mv -n`,
+  verify the Debian download checksum before dpkg-deb inspects it, and keep
+  check.sh temp files cleaned up on failure paths.
+- WebAssembly core: catch-all guards at the C ABI boundary plus stricter key,
+  modifier, and learning-state validation in the JS wrapper.
+
+## 2.5.7 - 2026-08-22
+
+- Add an opt-in `ShowPendingZhuyin` setting (off by default). While an
+  incomplete 注音 syllable is pending, its Bopomofo symbols are shown in the
+  auxiliary line above the caret; the hint disappears once the syllable
+  converts, the input turns literal English, or candidate selection opens.
+  Contributed by @HongyiHank.
+- Clean up and complete the comments added with the pending-zhuyin hint.
+
+## 2.5.6 - 2026-08-22
+
+- Offer the full Chinese bracket family from the bracket keys: the `[` key
+  candidate window now also lists 【 〔 《 〈 and the `]` key lists 】 〕 》 〉
+  alongside 「 『 and their half/full-width forms, so title marks such as 《》
+  are reachable without switching tools.
+
+## 2.5.5 - 2026-08-22
+
+- Add a Nix flake exposing `packages`, `overlays.default`, `nixosModules.default`
+  and `homeManagerModules.default`. The modules append Ari to
+  `i18n.inputMethod.fcitx5.addons` whenever Fcitx5 is the selected input method
+  framework, so NixOS users install through declarative configuration instead of
+  an install script. The package version is read from `CMakeLists.txt` at
+  evaluation time so it cannot drift from the source tree.
+- Add a GitHub Actions job that runs `nix flake check` on pushes and pull
+  requests.
+
 ## 2.5.4 - 2026-08-21
 
 - Build punctuation candidates from the same physical key, including its
@@ -157,7 +232,7 @@
 - Made pasted Emoji grapheme clusters safe to move and delete as one unit,
   including CRLF paste normalization.
 - Fixed the Fcitx5 addon descriptor to expose Ari's input method through its
-  installed `inputer-im.conf` entry (`OnDemand=True`); Fcitx can now load the
+  installed `ari-ime-im.conf` entry (`OnDemand=True`); Fcitx can now load the
   addon when Ari is selected instead of finding zero input methods.
 - Added a native, display-only candidate preview for completed Chinese results;
   it shows contextual alternatives without taking numeric keys away from the

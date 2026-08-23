@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-build_input="${INPUTER_BUILD_DIR:-build-public-release}"
+build_input="${ARI_IME_BUILD_DIR:-build-public-release}"
 
 if [[ "$build_input" = /* ]]; then
     build_dir="$build_input"
@@ -10,12 +10,12 @@ else
     build_dir="$repo_root/$build_input"
 fi
 
-if [[ -n "${INPUTER_INSTALL_PREFIX:-}" ]]; then
-    install_prefix="$INPUTER_INSTALL_PREFIX"
+if [[ -n "${ARI_IME_INSTALL_PREFIX:-}" ]]; then
+    install_prefix="$ARI_IME_INSTALL_PREFIX"
 elif [[ -n "${HOME:-}" ]]; then
     install_prefix="$HOME/.local"
 else
-    printf 'INPUTER_INSTALL_PREFIX or HOME is required\n' >&2
+    printf 'ARI_IME_INSTALL_PREFIX or HOME is required\n' >&2
     exit 2
 fi
 
@@ -76,10 +76,10 @@ if ! fcitx5-remote --check >/dev/null 2>&1; then
     exit 1
 fi
 
-fcitx5-remote -s inputer
+fcitx5-remote -s ari-ime
 current_im="$(fcitx5-remote -n)"
-if [[ "$current_im" != inputer ]]; then
-    printf 'Failed to select inputer; current input method: %s\n' "$current_im" >&2
+if [[ "$current_im" != ari-ime ]]; then
+    printf 'Failed to select ari-ime; current input method: %s\n' "$current_im" >&2
     exit 1
 fi
 
@@ -88,10 +88,10 @@ if [[ -z "$fcitx_pid" || ! -r "/proc/$fcitx_pid/maps" ]]; then
     printf 'Cannot inspect the running Fcitx5 module path\n' >&2
     exit 1
 fi
-if ! grep -Fq -- "$local_addon_dir/inputer.so" "/proc/$fcitx_pid/maps"; then
-    printf 'Fcitx5 did not load the local module: %s/inputer.so\n' "$local_addon_dir" >&2
+if ! grep -Fq -- "$local_addon_dir/ari-ime.so" "/proc/$fcitx_pid/maps"; then
+    printf 'Fcitx5 did not load the local module: %s/ari-ime.so\n' "$local_addon_dir" >&2
     printf 'Check that the selected input method is Ari IME and retry\n' >&2
     exit 1
 fi
 
-printf 'Fcitx5 is using the local Ari IME module (%s)\n' "$local_addon_dir/inputer.so"
+printf 'Fcitx5 is using the local Ari IME module (%s)\n' "$local_addon_dir/ari-ime.so"

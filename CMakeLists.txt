@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
-project(inputer VERSION 2.5.4 LANGUAGES CXX)
+project(ari-ime VERSION 2.6.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(INPUTER_ENABLE_SANITIZERS
+option(ARI_IME_ENABLE_SANITIZERS
     "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
-option(INPUTER_SANITIZER_DETECT_LEAKS
+option(ARI_IME_SANITIZER_DETECT_LEAKS
     "Enable LeakSanitizer leak checks when sanitizers are enabled" OFF)
-option(INPUTER_ENABLE_FUZZING
+option(ARI_IME_ENABLE_FUZZING
     "Build libFuzzer targets for Buffer state-machine fuzzing" OFF)
-option(INPUTER_ENABLE_COVERAGE
+option(ARI_IME_ENABLE_COVERAGE
     "Build tests with compiler coverage instrumentation" OFF)
 option(BUILD_TESTING
     "Build maintainer-only local tests" OFF)
@@ -27,10 +27,10 @@ find_package(Fcitx5ModuleClipboard REQUIRED) # clipboard_public.h for Ctrl+V pas
 # showCustomInputMethodInformation() was added in Fcitx5 5.1.11. Keep the
 # addon buildable with the older Fcitx5 shipped by Ubuntu 24.04; the fallback
 # uses the standard information popup and preserves the input behavior.
-set(INPUTER_HAVE_CUSTOM_INPUT_METHOD_INFORMATION OFF)
+set(ARI_IME_HAVE_CUSTOM_INPUT_METHOD_INFORMATION OFF)
 if(DEFINED Fcitx5Core_VERSION AND
    NOT Fcitx5Core_VERSION VERSION_LESS "5.1.11")
-    set(INPUTER_HAVE_CUSTOM_INPUT_METHOD_INFORMATION ON)
+    set(ARI_IME_HAVE_CUSTOM_INPUT_METHOD_INFORMATION ON)
 endif()
 
 find_package(PkgConfig REQUIRED)
@@ -41,27 +41,27 @@ message(STATUS "Using chewing ${Chewing_VERSION}")
 # output acknowledgement API.  Its compatibility wrapper needs a harmless
 # ignored event after the commit buffer has been consumed instead.
 if(Chewing_VERSION VERSION_LESS "0.9.0")
-    add_compile_definitions(INPUTER_LIBCHEWING_LEGACY_OUTPUT)
+    add_compile_definitions(ARI_IME_LIBCHEWING_LEGACY_OUTPUT)
 endif()
 
 # libchewing 0.10 made explicit user phrases take precedence. Older releases
 # expose the mapping to the C API but keep it in dictionary order, so Ari must
 # apply its own explicit preference sidecar for those distributions.
 if(Chewing_VERSION VERSION_LESS "0.10.0")
-    add_compile_definitions(INPUTER_LEGACY_PREFERENCE_PROMOTION)
+    add_compile_definitions(ARI_IME_LEGACY_PREFERENCE_PROMOTION)
 endif()
 
 include(GNUInstallDirs)
 
-function(inputer_enable_warnings target)
+function(ari_ime_enable_warnings target)
     target_compile_options(${target}
         PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
     )
 endfunction()
 
-function(inputer_enable_sanitizers target)
-    if(NOT INPUTER_ENABLE_SANITIZERS)
+function(ari_ime_enable_sanitizers target)
+    if(NOT ARI_IME_ENABLE_SANITIZERS)
         return()
     endif()
     target_compile_options(${target}
@@ -74,12 +74,12 @@ function(inputer_enable_sanitizers target)
     )
 endfunction()
 
-function(inputer_enable_fuzzer target)
-    if(NOT INPUTER_ENABLE_FUZZING)
+function(ari_ime_enable_fuzzer target)
+    if(NOT ARI_IME_ENABLE_FUZZING)
         return()
     endif()
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
-        message(FATAL_ERROR "INPUTER_ENABLE_FUZZING requires Clang or AppleClang")
+        message(FATAL_ERROR "ARI_IME_ENABLE_FUZZING requires Clang or AppleClang")
     endif()
     target_compile_options(${target}
         PRIVATE
@@ -92,12 +92,12 @@ function(inputer_enable_fuzzer target)
     )
 endfunction()
 
-function(inputer_enable_coverage target)
-    if(NOT INPUTER_ENABLE_COVERAGE)
+function(ari_ime_enable_coverage target)
+    if(NOT ARI_IME_ENABLE_COVERAGE)
         return()
     endif()
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-        message(FATAL_ERROR "INPUTER_ENABLE_COVERAGE requires GCC or Clang")
+        message(FATAL_ERROR "ARI_IME_ENABLE_COVERAGE requires GCC or Clang")
     endif()
     target_compile_options(${target}
         PRIVATE
@@ -111,8 +111,8 @@ function(inputer_enable_coverage target)
     )
 endfunction()
 
-function(inputer_configure_test name)
-    if(INPUTER_ENABLE_SANITIZERS AND NOT INPUTER_SANITIZER_DETECT_LEAKS)
+function(ari_ime_configure_test name)
+    if(ARI_IME_ENABLE_SANITIZERS AND NOT ARI_IME_SANITIZER_DETECT_LEAKS)
         set_tests_properties(${name}
             PROPERTIES
                 ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0;LSAN_OPTIONS=detect_leaks=0"
@@ -121,54 +121,54 @@ function(inputer_configure_test name)
 endfunction()
 
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/inputer-addon.conf.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/inputer-addon.conf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/ari-ime-addon.conf.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/ari-ime-addon.conf"
     @ONLY
 )
 
-add_library(inputer MODULE
+add_library(ari-ime MODULE
     src/layout.cpp
     src/user_data.cpp
     src/zhuyin.cpp
     src/buffer.cpp
-    src/inputer.cpp
+    src/ari_ime.cpp
 )
 
-target_link_libraries(inputer
+target_link_libraries(ari-ime
     PRIVATE
         Fcitx5::Core
         Fcitx5::Utils
         Fcitx5::Module::Clipboard
         PkgConfig::Chewing
 )
-if(INPUTER_HAVE_CUSTOM_INPUT_METHOD_INFORMATION)
-    target_compile_definitions(inputer
-        PRIVATE INPUTER_HAVE_CUSTOM_INPUT_METHOD_INFORMATION
+if(ARI_IME_HAVE_CUSTOM_INPUT_METHOD_INFORMATION)
+    target_compile_definitions(ari-ime
+        PRIVATE ARI_IME_HAVE_CUSTOM_INPUT_METHOD_INFORMATION
     )
 endif()
-inputer_enable_warnings(inputer)
-inputer_enable_sanitizers(inputer)
+ari_ime_enable_warnings(ari-ime)
+ari_ime_enable_sanitizers(ari-ime)
 
-# Drop the "lib" prefix: fcitx5 looks for "<Library>.so" where Library=inputer.
-set_target_properties(inputer PROPERTIES PREFIX "")
+# Drop the "lib" prefix: fcitx5 looks for "<Library>.so" where Library=ari-ime.
+set_target_properties(ari-ime PROPERTIES PREFIX "")
 
-install(TARGETS inputer
+install(TARGETS ari-ime
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/fcitx5"
 )
 
 # Addon descriptor (tells fcitx5 this shared library is an addon).
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/inputer-addon.conf"
-    RENAME inputer.conf
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ari-ime-addon.conf"
+    RENAME ari-ime.conf
     DESTINATION "${CMAKE_INSTALL_DATADIR}/fcitx5/addon"
 )
 
 # Input method registration.
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/inputer-im.conf"
-    RENAME inputer.conf
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/ari-ime-im.conf"
+    RENAME ari-ime.conf
     DESTINATION "${CMAKE_INSTALL_DATADIR}/fcitx5/inputmethod"
 )
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/inputer.svg"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/ari-ime.svg"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps"
 )
 
@@ -201,28 +201,28 @@ target_link_libraries(ari-ime-dict
         PkgConfig::Chewing
 )
 target_compile_definitions(ari-ime-dict
-    PRIVATE INPUTER_CHEWING_VERSION="${Chewing_VERSION}"
+    PRIVATE ARI_IME_CHEWING_VERSION="${Chewing_VERSION}"
 )
-inputer_enable_warnings(ari-ime-dict)
-inputer_enable_sanitizers(ari-ime-dict)
+ari_ime_enable_warnings(ari-ime-dict)
+ari_ime_enable_sanitizers(ari-ime-dict)
 install(TARGETS ari-ime-dict
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
 
 # --- Maintainer-only local tests ---
-set(INPUTER_LOCAL_TESTS_AVAILABLE TRUE)
-foreach(inputer_local_test IN ITEMS
+set(ARI_IME_LOCAL_TESTS_AVAILABLE TRUE)
+foreach(ari_ime_local_test IN ITEMS
         test/test_buffer.cpp
         test/test_layout.cpp
         test/test_user_data.cpp
         test/test_enable_input_method.sh
         test/test_dict_tool.sh)
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${inputer_local_test}")
-        set(INPUTER_LOCAL_TESTS_AVAILABLE FALSE)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${ari_ime_local_test}")
+        set(ARI_IME_LOCAL_TESTS_AVAILABLE FALSE)
     endif()
 endforeach()
 
-if(BUILD_TESTING AND NOT INPUTER_LOCAL_TESTS_AVAILABLE)
+if(BUILD_TESTING AND NOT ARI_IME_LOCAL_TESTS_AVAILABLE)
     message(WARNING
         "BUILD_TESTING=ON was requested, but maintainer-only test sources "
         "are not present; local tests are disabled")
@@ -245,11 +245,11 @@ if(BUILD_TESTING)
             Fcitx5::Config
             PkgConfig::Chewing
     )
-    inputer_enable_warnings(test_buffer)
-    inputer_enable_sanitizers(test_buffer)
-    inputer_enable_coverage(test_buffer)
+    ari_ime_enable_warnings(test_buffer)
+    ari_ime_enable_sanitizers(test_buffer)
+    ari_ime_enable_coverage(test_buffer)
     add_test(NAME buffer COMMAND test_buffer)
-    inputer_configure_test(buffer)
+    ari_ime_configure_test(buffer)
 
     add_executable(test_layout
         test/test_layout.cpp
@@ -261,11 +261,11 @@ if(BUILD_TESTING)
             Fcitx5::Config
             PkgConfig::Chewing
     )
-    inputer_enable_warnings(test_layout)
-    inputer_enable_sanitizers(test_layout)
-    inputer_enable_coverage(test_layout)
+    ari_ime_enable_warnings(test_layout)
+    ari_ime_enable_sanitizers(test_layout)
+    ari_ime_enable_coverage(test_layout)
     add_test(NAME layout COMMAND test_layout)
-    inputer_configure_test(layout)
+    ari_ime_configure_test(layout)
 
     add_executable(test_user_data
         test/test_user_data.cpp
@@ -281,11 +281,11 @@ if(BUILD_TESTING)
             Fcitx5::Config
             PkgConfig::Chewing
     )
-    inputer_enable_warnings(test_user_data)
-    inputer_enable_sanitizers(test_user_data)
-    inputer_enable_coverage(test_user_data)
+    ari_ime_enable_warnings(test_user_data)
+    ari_ime_enable_sanitizers(test_user_data)
+    ari_ime_enable_coverage(test_user_data)
     add_test(NAME user_data COMMAND test_user_data)
-    inputer_configure_test(user_data)
+    ari_ime_configure_test(user_data)
 
     add_test(
         NAME profile_helper
@@ -296,10 +296,10 @@ if(BUILD_TESTING)
         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test/test_dict_tool.sh"
                 "$<TARGET_FILE:ari-ime-dict>"
     )
-    inputer_configure_test(dict_tool)
+    ari_ime_configure_test(dict_tool)
 endif()
 
-if(INPUTER_ENABLE_FUZZING AND EXISTS
+if(ARI_IME_ENABLE_FUZZING AND EXISTS
    "${CMAKE_CURRENT_SOURCE_DIR}/test/fuzz_buffer.cpp")
     add_executable(fuzz_buffer
         test/fuzz_buffer.cpp
@@ -315,10 +315,10 @@ if(INPUTER_ENABLE_FUZZING AND EXISTS
             Fcitx5::Config
             PkgConfig::Chewing
     )
-    inputer_enable_warnings(fuzz_buffer)
-    inputer_enable_fuzzer(fuzz_buffer)
-elseif(INPUTER_ENABLE_FUZZING)
+    ari_ime_enable_warnings(fuzz_buffer)
+    ari_ime_enable_fuzzer(fuzz_buffer)
+elseif(ARI_IME_ENABLE_FUZZING)
     message(WARNING
-        "INPUTER_ENABLE_FUZZING was requested, but maintainer-only fuzz "
+        "ARI_IME_ENABLE_FUZZING was requested, but maintainer-only fuzz "
         "sources are not present; the fuzz target is disabled")
 endif()

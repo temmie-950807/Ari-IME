@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#ifndef INPUTER_UNICODE_H
-#define INPUTER_UNICODE_H
+#ifndef ARI_IME_UNICODE_H
+#define ARI_IME_UNICODE_H
 
 #include <algorithm>
 #include <cstddef>
@@ -15,7 +15,7 @@
 // variation selectors, emoji modifiers, tag characters, regional-indicator
 // flags, and ZWJ emoji sequences; ordinary CJK/Latin text remains one cluster
 // per codepoint.
-namespace inputer::unicode {
+namespace ari_ime::unicode {
 
 struct CodePoint {
     std::uint32_t value = 0;
@@ -208,6 +208,10 @@ inline std::vector<std::string> splitGraphemes(const std::string &text) {
         end += first.length;
         bool previousJoiner = false;
         int regionalCount = isRegionalIndicator(first.value) ? 1 : 0;
+        // ZWJ only joins emoji sequences (UAX #29 scopes it to
+        // Extended_Pictographic runs). Track whether the cluster's base lives
+        // in a symbol/emoji block so an ordinary "a\u200Db" stops gluing.
+        std::uint32_t base = first.value;
 
         while (end < text.size()) {
             const CodePoint next = decode(text, end);
@@ -218,7 +222,9 @@ inline std::vector<std::string> splitGraphemes(const std::string &text) {
                 end += next.length;
                 break;
             }
-            if (isExtend(next.value) || next.value == 0x200D ||
+            const bool zwjJoin =
+                next.value == 0x200D && base >= 0x2000;
+            if (isExtend(next.value) || zwjJoin ||
                 previousJoiner || pairRegional) {
                 end += next.length;
                 if (pairRegional) {
@@ -252,6 +258,6 @@ inline std::size_t graphemeOffset(const std::string &text, int index) {
     return offset;
 }
 
-} // namespace inputer::unicode
+} // namespace ari_ime::unicode
 
-#endif // INPUTER_UNICODE_H
+#endif // ARI_IME_UNICODE_H

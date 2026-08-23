@@ -33,8 +33,9 @@ phrasing and per-user learning.
   auxiliary line. The labeled `原始鍵 ...` candidate restores a converted
   character back to its raw keys. Literal punctuation cells use the same picker:
   ↓ exposes only the half-width, full-width, Chinese and paired variants
-  associated with that key, with the current form first; for example, `[` can
-  be changed to `「`, `『`, `【`, etc., without unrelated `!` candidates.
+  associated with that key, with the current form first; for example, `[`
+  can be changed to `「`, `『`, `【`, `《` and other nested brackets, without
+  unrelated `!` candidates.
   If a punctuation-looking key such as `.` or `,` is also used in a 注音
   syllable, its punctuation variants are added to that Chinese character's
   candidate list as well; the complete Chinese candidate list stays first,
@@ -202,12 +203,64 @@ yay -S fcitx5-ari-ime && ari-ime-enable --yes --make-default
 Developers can instead clone this repository and use the manual source-build
 instructions below.
 
+## Install on NixOS
+
+The repository ships a Nix flake. Its module registers Ari as a Fcitx5 addon
+automatically whenever Fcitx5 is the configured input method framework, so
+installation is declarative — there is no install script to run.
+
+1. Add the flake input and import the module:
+
+   ```nix
+   # flake.nix
+   inputs.ari-ime.url = "github:kaiyasi/Ari-IME";
+   ```
+
+   ```nix
+   # configuration.nix
+   { inputs, ... }: {
+     imports = [ inputs.ari-ime.nixosModules.default ];
+
+     i18n.inputMethod = {
+       type = "fcitx5";
+       fcitx5.addons = [ ]; # Ari is appended by the imported module
+     };
+   }
+   ```
+
+2. Rebuild and log out and back in:
+
+   ```sh
+   sudo nixos-rebuild switch --flake .#your-host
+   ```
+
+3. Add **Ari IME** (`ari-ime`) through `fcitx5-configtool`, or run
+   `ari-ime-enable --yes --make-default` if you prefer the same helper used on
+   other distributions.
+
+Home Manager users who manage only their home directory can import
+`homeManagerModules.default` with the same `i18n.inputMethod` options.
+To wire the package manually without any module:
+
+```nix
+i18n.inputMethod.fcitx5.addons =
+  [ inputs.ari-ime.packages.${pkgs.system}.default ];
+```
+
+The flake also provides `overlays.default` (adds
+`pkgs.fcitx5-ari-ime`) and a development shell via `nix develop`. The package
+version is read from `CMakeLists.txt`, so it always matches the source tree.
+
+Learned personal data lives under `~/.config/ari-ime/` exactly like on other
+distributions; `nixos-rebuild` never removes it. Resetting it stays available
+through `ari-ime-reset-data`.
+
 ## Source-build dependencies
 
 - fcitx5 (and `Fcitx5Core` / `Fcitx5Config` / `Fcitx5Utils` /
   `Fcitx5ModuleClipboard` development files)
 - libchewing (`chewing`)
-- hicolor-icon-theme (for the installed `inputer` icon)
+- hicolor-icon-theme (for the installed `ari-ime` icon)
 - extra-cmake-modules (ECM)
 - a C++20 compiler, CMake ≥ 3.16
 
@@ -305,7 +358,7 @@ Fcitx5 input-method group, creates a timestamped backup before changing an
 existing profile, and makes Ari the default only when `--make-default` is
 given. Omit that option to keep the current default input method. When run in a
 graphical session, it starts Fcitx5 if needed, reloads the profile, selects Ari,
-and verifies that `inputer` is active; in a headless shell it updates the profile
+and verifies that `ari-ime` is active; in a headless shell it updates the profile
 but asks you to start Fcitx5 and run the command again.
 
 ### Local user-directory install (development)
@@ -320,7 +373,7 @@ bash scripts/install-local.sh
 ```
 
 The helper uses `build-public-release` by default. For the ordinary `build`
-directory, use `INPUTER_BUILD_DIR=build bash scripts/install-local.sh`. This is
+directory, use `ARI_IME_BUILD_DIR=build bash scripts/install-local.sh`. This is
 intended for the current development session. For a persistent desktop install,
 use the AUR package, a GitHub release package, or install under `/usr` as shown
 above so Fcitx5 finds the addon through its normal search path.
@@ -335,8 +388,8 @@ The graphical alternative is to add **Ari IME** in `fcitx5-configtool`:
 Then select it once and verify the active name:
 
 ```sh
-fcitx5-remote -s inputer
-fcitx5-remote -n   # should print: inputer
+fcitx5-remote -s ari-ime
+fcitx5-remote -n   # should print: ari-ime
 ```
 
 Per-addon options (keyboard layout, Chinese-punctuation shortcut, Space
@@ -354,9 +407,9 @@ deterministic and do not touch your real `~/.config` data.
 
 Development/test safeguards around personalization:
 
-- Automated tests set `INPUTER_USER_DATA_DIR` and `XDG_CONFIG_HOME` to a fresh
+- Automated tests set `ARI_IME_USER_DATA_DIR` and `XDG_CONFIG_HOME` to a fresh
   temp directory.
-- Automated tests also set `INPUTER_DISABLE_AUTOLEARN=1`, so no learned
+- Automated tests also set `ARI_IME_DISABLE_AUTOLEARN=1`, so no learned
   personalization is intentionally recorded during ordinary
   unit/integration/fuzz runs, and any libchewing-created artifacts stay inside
   the disposable temp directory.
@@ -375,10 +428,10 @@ release build, CTest, install smoke check, PKGBUILD syntax check, and the
 sanitizer test profile. The version check prints the validated Ari IME version,
 libchewing version, CMake version, and active C++ compiler so CI failures can be
 correlated with dependency changes. Add
-`INPUTER_CHECK_PACKAGE=1` to also run an offline Arch package
+`ARI_IME_CHECK_PACKAGE=1` to also run an offline Arch package
 `build/check/package` simulation.
 
-Set `INPUTER_CHECK_MODE=release`, `sanitize`, `coverage`, `fuzz`, or `package`
+Set `ARI_IME_CHECK_MODE=release`, `sanitize`, `coverage`, `fuzz`, or `package`
 to run just one part of the check. GitHub Actions uses the release, sanitizer,
 bounded-fuzz, and package modes as separate jobs in an Arch Linux container on
 pushes and pull requests.
@@ -386,29 +439,29 @@ pushes and pull requests.
 For memory/undefined-behavior checks:
 
 ```sh
-cmake -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DINPUTER_ENABLE_SANITIZERS=ON
+cmake -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DARI_IME_ENABLE_SANITIZERS=ON
 cmake --build build-sanitize
 ctest --test-dir build-sanitize --output-on-failure
 ```
 
 Leak detection is disabled in this profile so the tests still run in ptrace-based
 sandboxes. To include LeakSanitizer on a normal local/CI runner, add
-`-DINPUTER_SANITIZER_DETECT_LEAKS=ON`.
+`-DARI_IME_SANITIZER_DETECT_LEAKS=ON`.
 
 For a local gcov coverage report:
 
 ```sh
-INPUTER_CHECK_MODE=coverage scripts/check.sh
+ARI_IME_CHECK_MODE=coverage scripts/check.sh
 ```
 
-This builds the tests with `-DINPUTER_ENABLE_COVERAGE=ON`, runs CTest, and writes
+This builds the tests with `-DARI_IME_ENABLE_COVERAGE=ON`, runs CTest, and writes
 `.gcov` reports for the main `src/` state-machine files to
 `build-coverage/gcov/`.
 
 For bounded state-machine fuzzing with libFuzzer:
 
 ```sh
-cmake -B build-fuzz -DCMAKE_CXX_COMPILER=clang++ -DINPUTER_ENABLE_FUZZING=ON
+cmake -B build-fuzz -DCMAKE_CXX_COMPILER=clang++ -DARI_IME_ENABLE_FUZZING=ON
 cmake --build build-fuzz --target fuzz_buffer
 ./build-fuzz/fuzz_buffer -runs=1000
 ```
@@ -416,13 +469,13 @@ cmake --build build-fuzz --target fuzz_buffer
 The fuzz target is opt-in and is not part of the normal release/package build.
 It feeds mixed key, paste, candidate-selection, layout-switch, and punctuation
 events into `Buffer` while checking UTF-8 and public caret/candidate invariants.
-Use `INPUTER_CHECK_MODE=fuzz scripts/check.sh` for the same bounded smoke run
+Use `ARI_IME_CHECK_MODE=fuzz scripts/check.sh` for the same bounded smoke run
 that CI uses. It loads the seed corpus in `test/corpus/fuzz_buffer` when present;
 the check script copies those seeds into a temporary corpus first so local fuzz
 runs do not dirty the tracked seed directory. Printable ASCII bytes in those
 seeds are interpreted as direct key presses. Set
-`INPUTER_FUZZ_RUNS` to adjust the run count, or `INPUTER_FUZZ_CORPUS_DIR` to
-point at another corpus directory. Set `INPUTER_FUZZ_ARTIFACT_DIR` to make
+`ARI_IME_FUZZ_RUNS` to adjust the run count, or `ARI_IME_FUZZ_CORPUS_DIR` to
+point at another corpus directory. Set `ARI_IME_FUZZ_ARTIFACT_DIR` to make
 libFuzzer write crash reproducers to a dedicated directory for CI artifact
 upload.
 
@@ -442,8 +495,8 @@ Release-specific notes are tracked in [CHANGELOG.md](CHANGELOG.md) and
 
 Ari IME stores its learned per-user data in its own directory:
 
-- `${INPUTER_USER_DATA_DIR}`, when `INPUTER_USER_DATA_DIR` is set
-- otherwise `${XDG_CONFIG_HOME:-$HOME/.config}/inputer/`
+- `${ARI_IME_USER_DATA_DIR}`, when `ARI_IME_USER_DATA_DIR` is set
+- otherwise `${XDG_CONFIG_HOME:-$HOME/.config}/ari-ime/`
 
 That directory holds `userdict.dat`, Ari's explicit `preferences.tsv`, plus
 libchewing's learned files (`chewing.dat`, `chewing-deleted.dat`). Ari pins
@@ -503,7 +556,7 @@ explicitly want to discard the existing learned file.
 For test/dev isolation, point Ari IME at a disposable user-data directory:
 
 ```sh
-export INPUTER_USER_DATA_DIR=/tmp/inputer-dev-userdata
+export ARI_IME_USER_DATA_DIR=/tmp/ari-ime-dev-userdata
 ```
 
 ## License

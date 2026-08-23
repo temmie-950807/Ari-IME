@@ -1,3 +1,48 @@
+fcitx5-ari-ime (2.6.1) unstable; urgency=medium
+
+  * Replace the legacy internal identifier with ari-ime throughout
+    the Fcitx5 addon, input method descriptor, shared library, icon, helper
+    commands, and package metadata.
+  * Keep the display name as Ari IME and synchronize the native and WebAssembly
+    package versions at 2.6.1.
+
+ -- Kaiyasi <zengcode0315@gmail.com>  Sun, 23 Aug 2026 00:00:00 +0000
+
+fcitx5-ari-ime (2.6.0) unstable; urgency=medium
+
+  * Hardening release from a full code audit: Hsu neutral-tone key,
+    full-width punctuation guard against Bopomofo keys, stale candidate
+    window fix, validated clipboard paste, dict-tool import validation and
+    atomic export, symlink-safe profile editing, collision-proof reset
+    backups, checksum-first Ubuntu installer, WebAssembly ABI guards.
+
+ -- Kaiyasi <zengcode0315@gmail.com>  Sun, 23 Aug 2026 00:00:00 +0000
+
+fcitx5-ari-ime (2.5.7) unstable; urgency=medium
+
+  * Add an opt-in ShowPendingZhuyin setting (off by default) that shows the
+    pending syllable's Bopomofo symbols in the auxiliary line while typing.
+  * Clean up the pending-hint comments contributed with the feature.
+
+ -- Kaiyasi <zengcode0315@gmail.com>  Sat, 22 Aug 2026 00:00:00 +0000
+
+fcitx5-ari-ime (2.5.6) unstable; urgency=medium
+
+  * Offer the full Chinese bracket family from the bracket keys: the [ key
+    candidate window lists 【 〔 《 〈 and the ] key lists 】 〕 》 〉 alongside
+    「 『, so title marks such as 《》 are reachable without switching tools.
+
+ -- Kaiyasi <zengcode0315@gmail.com>  Sat, 22 Aug 2026 00:00:00 +0000
+
+fcitx5-ari-ime (2.5.5) unstable; urgency=medium
+
+  * Add a Nix flake exposing packages, an overlay, and NixOS/home-manager
+    modules that register Ari with the Fcitx5 addon list automatically.
+  * Add a GitHub Actions job that builds the flake on pushes and pull
+    requests.
+
+ -- Kaiyasi <zengcode0315@gmail.com>  Sat, 22 Aug 2026 00:00:00 +0000
+
 fcitx5-ari-ime (2.5.4) unstable; urgency=medium
 
   * Build punctuation candidates from the same physical key, including its

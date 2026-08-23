@@ -55,15 +55,8 @@ else
     checksum_url="${versioned_url%.deb}.sha256"
 fi
 
-package_name="$(dpkg-deb --field "$deb_path" Package 2>/dev/null || true)"
-[[ "$package_name" == fcitx5-ari-ime ]] || die 'the downloaded file is not an Ari IME Debian package'
-package_arch="$(dpkg-deb --field "$deb_path" Architecture 2>/dev/null || true)"
-system_arch="$(dpkg --print-architecture 2>/dev/null || true)"
-[[ "$package_arch" == "$system_arch" || "$package_arch" == all ]] ||
-    die "the package is for $package_arch, but this system is $system_arch"
-
-# Releases publish a checksum beside every package. Verify it when available
-# before handing the package to apt.
+# Releases publish a checksum beside every package. Verify it before the
+# downloaded bytes are inspected by dpkg-deb below, let alone handed to apt.
 checksum="$(curl --fail --location --silent --show-error --retry 3 \
     "$checksum_url" | awk 'NR == 1 { print $1; exit }' || true)"
 if [[ "$checksum" =~ ^[[:xdigit:]]{64}$ ]]; then
@@ -72,6 +65,13 @@ if [[ "$checksum" =~ ^[[:xdigit:]]{64}$ ]]; then
 else
     die 'the latest GitHub release has no usable Debian package checksum'
 fi
+
+package_name="$(dpkg-deb --field "$deb_path" Package 2>/dev/null || true)"
+[[ "$package_name" == fcitx5-ari-ime ]] || die 'the downloaded file is not an Ari IME Debian package'
+package_arch="$(dpkg-deb --field "$deb_path" Architecture 2>/dev/null || true)"
+system_arch="$(dpkg --print-architecture 2>/dev/null || true)"
+[[ "$package_arch" == "$system_arch" || "$package_arch" == all ]] ||
+    die "the package is for $package_arch, but this system is $system_arch"
 
 sudo apt-get update
 (
@@ -83,6 +83,6 @@ command -v ari-ime-enable >/dev/null 2>&1 ||
     die 'the package installed without ari-ime-enable'
 
 # This also reloads an existing daemon, starts it in a graphical session when
-# needed, selects Ari, and verifies that inputer is the active IME.
+# needed, selects Ari, and verifies that ari-ime is the active IME.
 ari-ime-enable --yes --make-default
 printf '%s\n' 'Ari IME was downloaded, installed, enabled, and selected as default.'

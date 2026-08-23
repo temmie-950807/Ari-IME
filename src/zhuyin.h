@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#ifndef INPUTER_ZHUYIN_H
-#define INPUTER_ZHUYIN_H
+#ifndef ARI_IME_ZHUYIN_H
+#define ARI_IME_ZHUYIN_H
 
 #include <string>
 #include <unordered_map>
+#include <deque>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -43,7 +44,7 @@ public:
 
     // Clear all internal buffers but keep settings + learned user dictionary.
     void resetAll();
-    void setKeyboardLayout(inputer::KeyboardLayout layout);
+    void setKeyboardLayout(ari_ime::KeyboardLayout layout);
 
     // Feed a single raw key (a printable ASCII character, e.g. 's', 'u', '3').
     void feedKey(char c);
@@ -62,6 +63,10 @@ public:
     // Converted characters followed by any pending bopomofo, for pre-edit
     // display (e.g. "你" or "ㄋㄧ").
     std::string preedit() const;
+
+    // Pending (not yet converted) bopomofo symbols only.
+    // Empty when nothing is pending; never includes converted text.
+    std::string bopomofoString() const;
 
     // --- Key forwarding (中文模式 / 注音優先): drive chewing directly. ---
     void handleDefault(int key); // printable ASCII -> bopomofo / selection
@@ -155,7 +160,7 @@ private:
     std::string bopomofoForKeys(const std::string &keys);
 
     ChewingContext *ctx_ = nullptr;
-    inputer::KeyboardLayout layout_ = inputer::currentKeyboardLayout();
+    ari_ime::KeyboardLayout layout_ = ari_ime::currentKeyboardLayout();
     bool userPhraseCacheLoaded_ = false;
     std::unordered_set<std::string> userPhraseTexts_;
     // On legacy libchewing, only sidecar entries that also exist in the
@@ -165,7 +170,9 @@ private:
     // External committed text may need a bounded reverse lookup. Cache the
     // first valid reading per character so repeated reconversion stays quick;
     // readings learned from Ari's own cells are kept separately in Buffer.
+    // Insertion order is kept so eviction is FIFO.
     std::unordered_map<std::string, std::string> reverseReadings_;
+    std::deque<std::string> reverseReadingsOrder_;
 };
 
-#endif // INPUTER_ZHUYIN_H
+#endif // ARI_IME_ZHUYIN_H

@@ -32,7 +32,7 @@ constexpr fcitx::KeySym kTemplatePrefixKey = '`';
 // in our pre-edit (e.g. typing 2~3 on the keypad produced 23~).
 // Number of Unicode characters in a UTF-8 string (counts lead bytes).
 int utf8Count(const std::string &s) {
-    return inputer::unicode::graphemeCount(s);
+    return ari_ime::unicode::graphemeCount(s);
 }
 
 // Split a UTF-8 string into its individual characters (codepoints).
@@ -225,7 +225,7 @@ bool isShiftedAsciiPunctuation(fcitx::KeySym sym) {
 }
 
 bool punctuationShortcutActive(
-    const fcitx::Key &key, inputer::ChinesePunctuationShortcut shortcut) {
+    const fcitx::Key &key, ari_ime::ChinesePunctuationShortcut shortcut) {
     const bool ctrl = key.states().test(fcitx::KeyState::Ctrl);
     const bool alt = key.states().test(fcitx::KeyState::Alt);
     const bool super = key.states().test(fcitx::KeyState::Super);
@@ -235,20 +235,20 @@ bool punctuationShortcutActive(
         return false;
     }
     switch (shortcut) {
-    case inputer::ChinesePunctuationShortcut::ControlShift:
+    case ari_ime::ChinesePunctuationShortcut::ControlShift:
         return ctrl && shifted;
-    case inputer::ChinesePunctuationShortcut::AltShift:
+    case ari_ime::ChinesePunctuationShortcut::AltShift:
         return alt && shifted;
-    case inputer::ChinesePunctuationShortcut::Control:
+    case ari_ime::ChinesePunctuationShortcut::Control:
         return ctrl;
-    case inputer::ChinesePunctuationShortcut::Alt:
+    case ari_ime::ChinesePunctuationShortcut::Alt:
         return alt;
     // Shift alone reaches the Chinese forms without a chord, at the cost of
     // the shifted ASCII symbols that have a full-width counterpart: Shift+,
     // gives ，rather than <. Symbols with no Chinese form are unaffected.
-    case inputer::ChinesePunctuationShortcut::Shift:
+    case ari_ime::ChinesePunctuationShortcut::Shift:
         return shifted && !ctrl && !alt;
-    case inputer::ChinesePunctuationShortcut::Disabled:
+    case ari_ime::ChinesePunctuationShortcut::Disabled:
         return false;
     }
     return false;
@@ -269,8 +269,8 @@ bool isAltCornerQuoteKey(const fcitx::Key &key, fcitx::KeySym sym) {
 }
 
 Zhuyin *probeForCurrentLayout(Zhuyin *&probe,
-                              inputer::KeyboardLayout &probeLayout) {
-    inputer::KeyboardLayout layout = inputer::currentKeyboardLayout();
+                              ari_ime::KeyboardLayout &probeLayout) {
+    ari_ime::KeyboardLayout layout = ari_ime::currentKeyboardLayout();
     if (!probe || probeLayout != layout) {
         delete probe;
         probe = new Zhuyin();
@@ -286,7 +286,7 @@ bool syllableConverts(const std::string &canonicalKeys) {
     // down during static destruction. It is rebuilt only on explicit layout
     // changes while the process is alive.
     static Zhuyin *probe = nullptr;
-    static inputer::KeyboardLayout probeLayout = inputer::KeyboardLayout::Default;
+    static ari_ime::KeyboardLayout probeLayout = ari_ime::KeyboardLayout::Default;
     probe = probeForCurrentLayout(probe, probeLayout);
     probe->feedSequence(canonicalKeys);
     return probe->hasConverted() && !probe->hasBopomofo() &&
@@ -297,7 +297,7 @@ bool syllableConverts(const std::string &canonicalKeys) {
 // space key applies). Used to decide if space should convert a pending syllable.
 bool syllableConvertsTone1(const std::string &canonicalBody) {
     static Zhuyin *probe = nullptr;
-    static inputer::KeyboardLayout probeLayout = inputer::KeyboardLayout::Default;
+    static ari_ime::KeyboardLayout probeLayout = ari_ime::KeyboardLayout::Default;
     probe = probeForCurrentLayout(probe, probeLayout);
     probe->feedSequence(canonicalBody);
     probe->handleSpace(); // 一聲
@@ -348,10 +348,16 @@ std::string chinesePunct(char c) {
     }
     // Intentionally leaked, like the syllable probes above.
     static Zhuyin *probe = nullptr;
-    static inputer::KeyboardLayout probeLayout = inputer::KeyboardLayout::Default;
+    static ari_ime::KeyboardLayout probeLayout = ari_ime::KeyboardLayout::Default;
     probe = probeForCurrentLayout(probe, probeLayout);
     probe->resetAll();
     probe->handleDefault(static_cast<int>(c));
+    // A key that is a 注音 key in this layout parks a Bopomofo symbol instead
+    // of producing punctuation; never let that glyph leak out as "punct".
+    if (probe->hasBopomofo()) {
+        probe->resetAll();
+        return {};
+    }
     std::string out;
     if (probe->hasCommit()) {
         out = probe->takeCommit();
@@ -372,15 +378,24 @@ std::string chinesePunct(char c) {
 // several other layouts. Their ordinary full-width path must leave them
 // available for syllables, but an explicit punctuation shortcut deliberately
 // asks for the punctuation associated with that physical key.
-std::string chinesePunctShortcut(char c) {
+// The punctuation keys that layouts also spend on 注音 — the comma is ㄝ on
+// 大千, the period ㄡ. Naming them here is what lets them convert at all:
+// chinesePunct() finds forms by asking libchewing what a key produces, and for
+// these it answers with a Bopomofo symbol rather than punctuation.
+std::string explicitChinesePunct(char c) {
     switch (c) {
     case ',': return "，";
     case '.': return "。";
     case '/': return "？";
     case ';': return "；";
     case '-': return "－";
-    default: return chinesePunct(c);
+    default: return {};
     }
+}
+
+std::string chinesePunctShortcut(char c) {
+    const std::string named = explicitChinesePunct(c);
+    return named.empty() ? chinesePunct(c) : named;
 }
 
 // Paired punctuation: typing the opening half also parks its closing half after
@@ -402,7 +417,7 @@ std::string closingPunctuationFor(const std::string &opening) {
 
 std::string punctuationForShortcutEvent(
     char sym, fcitx::KeyStates states,
-    inputer::ChinesePunctuationShortcut shortcut) {
+    ari_ime::ChinesePunctuationShortcut shortcut) {
     const auto keySym = static_cast<fcitx::KeySym>(sym);
     const fcitx::Key key(keySym, states);
     if (isAltCornerQuoteKey(key, keySym)) {
@@ -441,7 +456,7 @@ std::vector<std::string> punctuationCandidatesForPhysicalKey(
 
     if (fullWidthPunctuation) {
         for (char sym : {key.base, key.shifted}) {
-            if (inputer::zhuyinSlot(sym) < 0) {
+            if (ari_ime::zhuyinSlot(sym) < 0) {
                 appendUniquePunctuation(candidates, chinesePunct(sym));
             }
         }
@@ -460,25 +475,38 @@ std::vector<std::string> punctuationCandidatesForPhysicalKey(
     appendUniquePunctuation(
         candidates,
         punctuationForShortcutEvent(
-            key.base, ctrl, inputer::ChinesePunctuationShortcut::Control));
+            key.base, ctrl, ari_ime::ChinesePunctuationShortcut::Control));
     appendUniquePunctuation(
         candidates,
         punctuationForShortcutEvent(
             key.shifted, ctrlShift,
-            inputer::ChinesePunctuationShortcut::ControlShift));
+            ari_ime::ChinesePunctuationShortcut::ControlShift));
     appendUniquePunctuation(
         candidates,
         punctuationForShortcutEvent(
-            key.base, alt, inputer::ChinesePunctuationShortcut::Disabled));
+            key.base, alt, ari_ime::ChinesePunctuationShortcut::Disabled));
     appendUniquePunctuation(
         candidates,
         punctuationForShortcutEvent(
-            key.base, alt, inputer::ChinesePunctuationShortcut::Alt));
+            key.base, alt, ari_ime::ChinesePunctuationShortcut::Alt));
     appendUniquePunctuation(
         candidates,
         punctuationForShortcutEvent(
             key.shifted, altShift,
-            inputer::ChinesePunctuationShortcut::AltShift));
+            ari_ime::ChinesePunctuationShortcut::AltShift));
+
+    // The Chinese bracket family belongs to the two bracket keys, the same
+    // grouping the recognition catalog uses. Nested title marks 《》 and
+    // tortoise-shell 【】 stay reachable without borrowing unrelated symbols
+    // from non-bracket keys.
+    if (key.base == '[' || key.base == ']') {
+        const std::array<const char *, 4> &marks =
+            key.base == '[' ? std::array<const char *, 4>{"【", "〔", "《", "〈"}
+                            : std::array<const char *, 4>{"】", "〕", "》", "〉"};
+        for (const char *mark : marks) {
+            appendUniquePunctuation(candidates, mark);
+        }
+    }
 
     return candidates;
 }
@@ -542,8 +570,8 @@ bool canPeelEnglishBody(const std::string &prefix, const std::string &body) {
     bool hasInitial = false;
     bool hasMedial = false;
     for (char c : body) {
-        int slot = inputer::zhuyinSlot(c);
-        if (slot < 0 || slot == inputer::kToneSlot) {
+        int slot = ari_ime::zhuyinSlot(c);
+        if (slot < 0 || slot == ari_ime::kToneSlot) {
             continue;
         }
         ++nonToneSlots;
@@ -576,11 +604,11 @@ bool canPeelEnglishBody(const std::string &prefix, const std::string &body) {
 }
 
 bool canPeelSymbolLedBody(const std::string &body) {
-    if (body.size() < 2 || !inputer::isSymbolLikeZhuyinKey(body.front())) {
+    if (body.size() < 2 || !ari_ime::isSymbolLikeZhuyinKey(body.front())) {
         return false;
     }
     return std::any_of(body.begin() + 1, body.end(), [](char c) {
-        return inputer::zhuyinSlot(c) >= 0;
+        return ari_ime::zhuyinSlot(c) >= 0;
     });
 }
 
@@ -611,6 +639,30 @@ bool hasAsciiDigit(const std::string &s) {
 
 } // namespace
 
+std::string Buffer::pendingSyllableHint() const {
+    if (syl_.empty() || !zhuyin_.ok()) {
+        return {};
+    }
+    // Tone keys are stripped: chewing drops a lone initial + tone outright,
+    // so only the body can be probed while the syllable is incomplete.
+    std::string body;
+    for (char c : syl_) {
+        if (!ari_ime::isToneKey(c)) {
+            body.push_back(c);
+        }
+    }
+    if (body.empty()) {
+        return {};
+    }
+    // Intentionally leaked at process exit, same rationale as
+    // syllableConverts above: rebuilt only on explicit layout changes.
+    static Zhuyin *probe = nullptr;
+    static ari_ime::KeyboardLayout probeLayout = ari_ime::KeyboardLayout::Default;
+    Zhuyin *ctx = probeForCurrentLayout(probe, probeLayout);
+    ctx->feedSequence(ari_ime::canonicalKeys(body));
+    return ctx->bopomofoString();
+}
+
 void Buffer::reset() {
     token_ = Token::Chinese;
     templateMode_ = false;
@@ -633,7 +685,7 @@ void Buffer::reset() {
     zhuyin_.resetAll();
 }
 
-bool Buffer::setKeyboardLayout(inputer::KeyboardLayout layout) {
+bool Buffer::setKeyboardLayout(ari_ime::KeyboardLayout layout) {
     if (layout_ == layout) {
         return false;
     }
@@ -642,8 +694,13 @@ bool Buffer::setKeyboardLayout(inputer::KeyboardLayout layout) {
     // re-feeding old readings through a different layout.
     reset();
     layout_ = layout;
-    inputer::setCurrentKeyboardLayout(layout_);
+    ari_ime::setCurrentKeyboardLayout(layout_);
     zhuyin_.setKeyboardLayout(layout_);
+    // knownReadings_ caches the same layout-specific raw keys for
+    // reconversion; stale entries would be re-fed through the new layout and
+    // produce garbage readings.
+    knownReadings_.clear();
+    knownReadingsOrder_.clear();
     return true;
 }
 
@@ -750,13 +807,13 @@ std::string Buffer::preeditText() const {
 }
 
 KeyResult Buffer::beginReconversion(const std::string &text) {
-    if (text.empty() || inputer::unicode::graphemeCount(text) >
-                            inputer::kMaxCompositionChars ||
+    if (text.empty() || ari_ime::unicode::graphemeCount(text) >
+                            ari_ime::kMaxCompositionChars ||
         !preeditText().empty()) {
         return {false, false, {}, false};
     }
 
-    const auto chars = inputer::unicode::splitGraphemes(text);
+    const auto chars = ari_ime::unicode::splitGraphemes(text);
     if (chars.empty() ||
         std::any_of(chars.begin(), chars.end(), [](const std::string &character) {
             return !containsHanCharacter(character);
@@ -810,7 +867,7 @@ std::vector<std::string> Buffer::candidates() const {
         return out; // caret mode shows no candidate window
     }
     out.reserve(count);
-    int start = selPage_ * inputer::kCandPerPage;
+    int start = selPage_ * ari_ime::kCandPerPage;
     for (int i = start; i < start + count; ++i) {
         out.push_back(selCands_[i].display);
     }
@@ -834,7 +891,7 @@ std::vector<std::string> Buffer::previewCandidates() {
     }
 
     std::vector<std::string> out;
-    out.reserve(inputer::kCandPerPage);
+    out.reserve(ari_ime::kCandPerPage);
     // The text already visible in the preedit is the recommendation the user
     // is currently seeing. Keep it first even if a libchewing build exposes a
     // shorter interval when its cursor is parked at the end of a phrase.
@@ -849,7 +906,7 @@ std::vector<std::string> Buffer::previewCandidates() {
                 continue;
             }
             out.push_back(candidate);
-            if (static_cast<int>(out.size()) >= inputer::kCandPerPage) {
+            if (static_cast<int>(out.size()) >= ari_ime::kCandPerPage) {
                 break;
             }
         }
@@ -881,7 +938,7 @@ KeyResult Buffer::selectCandidate(int pageIndex,
     if (pageIndex < 0 || pageIndex >= visibleCandidateCount()) {
         return {true, false, {}, false};
     }
-    const int globalIndex = selPage_ * inputer::kCandPerPage + pageIndex;
+    const int globalIndex = selPage_ * ari_ime::kCandPerPage + pageIndex;
     if (globalIndex < 0 || globalIndex >= static_cast<int>(selCands_.size()) ||
         selCands_[globalIndex].display != expectedText) {
         // The frontend may deliver a click after a page/navigation update. It
@@ -899,8 +956,8 @@ int Buffer::candidatePageCount() const {
     if (!candidateWindowOpen() || selCands_.empty()) {
         return 0;
     }
-    return (static_cast<int>(selCands_.size()) + inputer::kCandPerPage - 1) /
-           inputer::kCandPerPage;
+    return (static_cast<int>(selCands_.size()) + ari_ime::kCandPerPage - 1) /
+           ari_ime::kCandPerPage;
 }
 
 int Buffer::highlight() const {
@@ -1035,7 +1092,7 @@ KeyResult Buffer::handleAuto(const fcitx::Key &key) {
         // where the file is re-read. Doing it here rather than in a front end
         // means an edit takes effect on every platform without each one having
         // to remember to ask.
-        inputer::templateStore().reload();
+        ari_ime::templateStore().reload();
         loadTemplateCandidates();
         return {true, false, {}, true};
     }
@@ -1135,7 +1192,7 @@ KeyResult Buffer::handleChar(char c, bool literal) {
         // In an English token, some punctuation-looking keys are still valid
         // bopomofo pieces for tail peeling (e.g. "/" in "aceru/6" -> 螢). Only
         // convert keys that are not part of the active keyboard layout.
-        if (fullWidthPunct_ && inputer::zhuyinSlot(c) < 0) {
+        if (fullWidthPunct_ && ari_ime::zhuyinSlot(c) < 0) {
             std::string punct = chinesePunct(c);
             if (!punct.empty()) {
                 freezeRun();
@@ -1147,7 +1204,7 @@ KeyResult Buffer::handleChar(char c, bool literal) {
         }
         // English→Chinese transition without a delimiter: only a tone key, by
         // completing a trailing 注音 syllable, peels Chinese off the tail.
-        if (inputer::isToneKey(c)) {
+        if (ari_ime::isToneKey(c)) {
             KeyResult peeled;
             if (tryPeelEnglish(c, peeled)) {
                 return peeled;
@@ -1157,7 +1214,7 @@ KeyResult Buffer::handleChar(char c, bool literal) {
         return {true, false, {}, true};
     }
 
-    int s = inputer::zhuyinSlot(c);
+    int s = ari_ime::zhuyinSlot(c);
 
     // Non-注音 printable (punctuation, uppercase, ...). Ordinary input remains
     // literal regardless of context; only the explicit Ctrl+Shift gesture above
@@ -1180,7 +1237,7 @@ KeyResult Buffer::handleChar(char c, bool literal) {
         // medial, so with full-width punctuation on, a punctuation-looking key
         // pressed with no syllable under way is punctuation. Mid-syllable the
         // key keeps its 注音 meaning, so ㄒㄧㄝ still types normally.
-        if (fullWidthPunct_ && inputer::isSymbolLikeZhuyinKey(c)) {
+        if (fullWidthPunct_ && ari_ime::isSymbolLikeZhuyinKey(c)) {
             return handleLiteralChar(c);
         }
         syl_.push_back(c);
@@ -1191,7 +1248,7 @@ KeyResult Buffer::handleChar(char c, bool literal) {
     // unsealed hypothesis was wrong and we fall back to English. This goes
     // through the layout layer because some layouts have dual-role keys (Hsu
     // 'f' is ㄈ at syllable start but ˇ after a body).
-    if (!inputer::isValidSyllable(syl_ + c, /*allowTone=*/true)) {
+    if (!ari_ime::isValidSyllable(syl_ + c, /*allowTone=*/true)) {
         return handleLiteralChar(c);
     }
 
@@ -1199,10 +1256,10 @@ KeyResult Buffer::handleChar(char c, bool literal) {
     // Only turn raw keys into Chinese once they form a complete, toned syllable.
     // A toned-but-incomplete state like "s3" (ㄋˇ) stays raw so an out-of-order
     // vowel can still complete it ("s3" + u -> 你).
-    const std::string body = inputer::canonicalKeys(syl_);
+    const std::string body = ari_ime::canonicalKeys(syl_);
     const bool needsBody =
-        inputer::needsBodyBeforeToneCompletion(inputer::currentKeyboardLayout());
-    if ((!needsBody || inputer::hasMedialOrFinal(body)) &&
+        ari_ime::needsBodyBeforeToneCompletion(ari_ime::currentKeyboardLayout());
+    if ((!needsBody || ari_ime::hasMedialOrFinal(body)) &&
         syllableConverts(body)) {
         integrateSyllable(body);
         syl_.clear();
@@ -1212,11 +1269,15 @@ KeyResult Buffer::handleChar(char c, bool literal) {
 
 KeyResult Buffer::handleLiteralChar(char c) {
     if (fullWidthPunct_) {
-        // chinesePunct() discovers full-width forms by asking libchewing what a
-        // key produces, which comes up empty for keys the layout spends on 注音
-        // — the comma is ㄝ on 大千, so it never yielded ，. The shortcut table
-        // names those five explicitly and falls through to the probe otherwise.
-        std::string punct = chinesePunctShortcut(c);
+        // A key the active layout spends on 注音 may only convert when the
+        // table above names it outright. Probing such a key parks a Bopomofo
+        // symbol, and force-committing that emits a stray ㄅㄆㄇ character
+        // instead of punctuation — which is why everything else still has to
+        // clear the slot check before reaching the probe.
+        std::string punct = explicitChinesePunct(c);
+        if (punct.empty() && ari_ime::zhuyinSlot(c) < 0) {
+            punct = chinesePunct(c);
+        }
         if (!punct.empty()) {
             return insertPunctuation(punct);
         }
@@ -1286,7 +1347,7 @@ int Buffer::literalContextBiasAt(int idx) const {
     int bias = 0;
     const Cell &cell = cells_[idx];
     auto reading = readingBody(cell.reading).first;
-    if (!reading.empty() && inputer::isSymbolLikeZhuyinKey(reading.front())) {
+    if (!reading.empty() && ari_ime::isSymbolLikeZhuyinKey(reading.front())) {
         bias += 3;
     }
     if (cell.locked) {
@@ -1444,11 +1505,11 @@ bool Buffer::tryPeelEnglish(char tone, KeyResult &out) {
     for (std::size_t k = 0; k < buf.size(); ++k) {
         std::string prefix = buf.substr(0, k);
         std::string body = buf.substr(k);
-        if (!inputer::isValidSyllable(body, /*allowTone=*/false) ||
+        if (!ari_ime::isValidSyllable(body, /*allowTone=*/false) ||
             !canPeelSymbolLedFromEnglish(prefix, body)) {
             continue;
         }
-        std::string syllable = inputer::canonicalKeys(body);
+        std::string syllable = ari_ime::canonicalKeys(body);
         syllable.push_back(tone);
         if (!syllableConverts(syllable)) {
             continue;
@@ -1475,14 +1536,14 @@ bool Buffer::tryPeelEnglish(char tone, KeyResult &out) {
     // relying on a dictionary, which would miss non-words.
     for (std::size_t k = buf.size(); k-- > 0;) {
         std::string body = buf.substr(k);
-        if (!inputer::isValidSyllable(body, /*allowTone=*/false)) {
+        if (!ari_ime::isValidSyllable(body, /*allowTone=*/false)) {
             continue;
         }
         std::string prefix = buf.substr(0, k);
         if (!canPeelEnglishBody(prefix, body)) {
             continue;
         }
-        std::string syllable = inputer::canonicalKeys(body);
+        std::string syllable = ari_ime::canonicalKeys(body);
         syllable.push_back(tone);
         if (!syllableConverts(syllable)) {
             continue;
@@ -1512,11 +1573,11 @@ bool Buffer::tryPeelEnglishTone1(KeyResult &out) {
     for (std::size_t k = 0; k < buf.size(); ++k) {
         std::string prefix = buf.substr(0, k);
         std::string body = buf.substr(k);
-        if (!inputer::isValidSyllable(body, /*allowTone=*/false) ||
+        if (!ari_ime::isValidSyllable(body, /*allowTone=*/false) ||
             !canPeelSymbolLedFromEnglish(prefix, body)) {
             continue;
         }
-        std::string syllable = inputer::canonicalKeys(body);
+        std::string syllable = ari_ime::canonicalKeys(body);
         if (!syllableConvertsTone1(syllable)) {
             continue;
         }
@@ -1544,8 +1605,8 @@ KeyResult Buffer::handleSpace() {
     // A pending bopomofo syllable: space is its 一聲. Convert it if that yields a
     // character (a lone 聲母 like "t" does not — fall through to a literal space).
     if (!forcedEnglish_ && token_ == Token::Chinese && !syl_.empty()) {
-        const std::string body = inputer::canonicalKeys(syl_);
-        if (inputer::isValidSyllable(body, /*allowTone=*/false) &&
+        const std::string body = ari_ime::canonicalKeys(syl_);
+        if (ari_ime::isValidSyllable(body, /*allowTone=*/false) &&
             syllableConvertsTone1(body)) {
             if (!englishBuf_.empty()) {
                 freezeRun();
@@ -1623,12 +1684,19 @@ void Buffer::learnFromCells() {
                         cells_[j].chinese;
              ++j) {
             if (!cells_[j].reading.empty()) {
-                knownReadings_[cells_[j].text] = cells_[j].reading;
+                auto [entry, inserted] =
+                    knownReadings_.try_emplace(cells_[j].text,
+                                               cells_[j].reading);
+                if (inserted) {
+                    knownReadingsOrder_.push_back(entry->first);
+                }
             }
         }
         constexpr std::size_t kMaxKnownReadings = 4096;
-        while (knownReadings_.size() > kMaxKnownReadings) {
-            knownReadings_.erase(knownReadings_.begin());
+        while (knownReadings_.size() > kMaxKnownReadings &&
+               !knownReadingsOrder_.empty()) {
+            knownReadings_.erase(knownReadingsOrder_.front());
+            knownReadingsOrder_.pop_front();
         }
         int s = i;
         while (i < static_cast<int>(cells_.size()) && cells_[i].chinese) {
@@ -1687,9 +1755,9 @@ void Buffer::learnFromCells() {
 
 void Buffer::learnRange(int start, int end, int passes) {
     for (int chunkStart = start; chunkStart <= end;
-         chunkStart += inputer::kMaxCompositionChars) {
+         chunkStart += ari_ime::kMaxCompositionChars) {
         const int chunkEnd =
-            std::min(end, chunkStart + inputer::kMaxCompositionChars - 1);
+            std::min(end, chunkStart + ari_ime::kMaxCompositionChars - 1);
         for (int pass = 0; pass < passes; ++pass) {
             feedRun(chunkStart, chunkEnd, 0);
             relockRun(chunkStart, chunkEnd, /*onlyLocked=*/false);
@@ -1794,7 +1862,7 @@ void Buffer::relockRun(int start, int end, bool onlyLocked) {
             zhuyin_.handleRight();
         }
         zhuyin_.openCandidates();
-        for (int d = 0; d < inputer::kMaxSyllables; ++d) { // collapse to single chars
+        for (int d = 0; d < ari_ime::kMaxSyllables; ++d) { // collapse to single chars
             if (zhuyin_.candidateCount() <= 0 ||
                 utf8Count(zhuyin_.candidate(0)) <= 1) {
                 break;
@@ -1872,7 +1940,7 @@ void Buffer::buildSelCands() {
             continue;
         }
         for (int down = 0, guard = 0;
-             guard < inputer::kMaxSyllables; ++guard, ++down) {
+             guard < ari_ime::kMaxSyllables; ++guard, ++down) {
             int total = zhuyin_.candidateCount();
             if (total <= 0) {
                 break;
@@ -1924,7 +1992,7 @@ void Buffer::appendSymbolKeyPunctuationCandidates() {
 
     std::vector<std::string> punctuation;
     for (char key : reading) {
-        if (!inputer::isSymbolLikeZhuyinKey(key)) {
+        if (!ari_ime::isSymbolLikeZhuyinKey(key)) {
             continue;
         }
         PhysicalPunctuationKey physicalKey{};
@@ -2006,11 +2074,11 @@ int Buffer::visibleCandidateCount() const {
     if (!candidateWindowOpen() || selCands_.empty()) {
         return 0;
     }
-    int start = selPage_ * inputer::kCandPerPage;
+    int start = selPage_ * ari_ime::kCandPerPage;
     if (start < 0 || start >= static_cast<int>(selCands_.size())) {
         return 0;
     }
-    return std::min(inputer::kCandPerPage,
+    return std::min(ari_ime::kCandPerPage,
                     static_cast<int>(selCands_.size()) - start);
 }
 
@@ -2038,14 +2106,14 @@ void Buffer::loadCellCandidates() {
     }
     int s, e;
     chineseRunAround(selCursor_, s, e);
-    if (e - s + 1 > inputer::kMaxCompositionChars) {
+    if (e - s + 1 > ari_ime::kMaxCompositionChars) {
         // Keep the target inside libchewing's active window. Prefer context on
         // both sides, then slide at the sentence edges.
         const int runStart = s;
-        const int half = inputer::kMaxCompositionChars / 2;
+        const int half = ari_ime::kMaxCompositionChars / 2;
         s = std::max(s, selCursor_ - half);
-        e = std::min(e, s + inputer::kMaxCompositionChars - 1);
-        s = std::max(runStart, e - inputer::kMaxCompositionChars + 1);
+        e = std::min(e, s + ari_ime::kMaxCompositionChars - 1);
+        s = std::max(runStart, e - ari_ime::kMaxCompositionChars + 1);
     }
     int offset = selCursor_ - s;
     if (!runLoaded_ || s != selRunStart_ || e != selRunEnd_) {
@@ -2116,9 +2184,9 @@ std::vector<int> Buffer::phraseBoundaries() {
             const int end = i;
             std::vector<bool> covered(end - start, false);
             for (int chunkStart = start; chunkStart < end;
-                 chunkStart += inputer::kMaxCompositionChars) {
+                 chunkStart += ari_ime::kMaxCompositionChars) {
                 const int chunkEnd = std::min(
-                    end, chunkStart + inputer::kMaxCompositionChars);
+                    end, chunkStart + ari_ime::kMaxCompositionChars);
                 feedRun(chunkStart, chunkEnd - 1, 0);
                 for (const auto &[from, to] : zhuyin_.phraseIntervals()) {
                     if (from < 0 || to <= from || chunkStart + to > chunkEnd) {
@@ -2193,7 +2261,7 @@ KeyResult Buffer::moveCaretByPhrase(int direction) {
 }
 
 KeyResult Buffer::pickCandidate(int pageIndex) {
-    int gi = selPage_ * inputer::kCandPerPage + pageIndex;
+    int gi = selPage_ * ari_ime::kCandPerPage + pageIndex;
     if (gi < 0 || gi >= static_cast<int>(selCands_.size())) {
         candOpen_ = false; // no such candidate: fall back to caret mode
         caretPos_ = selCursor_;
@@ -2278,7 +2346,7 @@ KeyResult Buffer::undoSelection() {
 }
 
 KeyResult Buffer::forgetHighlightedCandidate() {
-    const int gi = selPage_ * inputer::kCandPerPage + highlight_;
+    const int gi = selPage_ * ari_ime::kCandPerPage + highlight_;
     if (gi < 0 || gi >= static_cast<int>(selCands_.size()) ||
         selCands_[gi].down < 0) {
         return {true, false, {}, false, false, "這個項目沒有個人學習紀錄"};
@@ -2349,8 +2417,8 @@ void Buffer::loadTemplateCandidates() {
     selPage_ = 0;
     highlight_ = 0;
     int order = 0;
-    for (const inputer::Template &entry :
-         inputer::templateStore().matching(templateCode_)) {
+    for (const ari_ime::Template &entry :
+         ari_ime::templateStore().matching(templateCode_)) {
         // The content is the row label, not the code: once a code is typed the
         // choice is between the entries sharing it, and only the content tells
         // them apart. Two rows reading "tem  信箱" would also be identical
@@ -2361,9 +2429,9 @@ void Buffer::loadTemplateCandidates() {
             label = label.substr(0, nl) + " …";
         }
         constexpr int kMaxLabel = 40;
-        if (inputer::unicode::graphemeCount(label) > kMaxLabel) {
+        if (ari_ime::unicode::graphemeCount(label) > kMaxLabel) {
             label = label.substr(
-                        0, inputer::unicode::graphemeOffset(label, kMaxLabel)) +
+                        0, ari_ime::unicode::graphemeOffset(label, kMaxLabel)) +
                     "…";
         }
         selCands_.push_back({entry.content, label, kPunctuationCandidateDown, 0,
@@ -2388,7 +2456,7 @@ KeyResult Buffer::leaveTemplateMode(bool emitPrefixKey) {
 }
 
 KeyResult Buffer::pickTemplate(int pageIndex) {
-    const int gi = selPage_ * inputer::kCandPerPage + pageIndex;
+    const int gi = selPage_ * ari_ime::kCandPerPage + pageIndex;
     if (gi < 0 || gi >= static_cast<int>(selCands_.size())) {
         return {true, false, {}, false};
     }
@@ -2503,8 +2571,31 @@ void Buffer::pasteAtCaret(const std::string &text) {
     // text, not something to re-pick. Keep the pre-edit single-line and safe for
     // clients by folding control/newline-like separators into one visible space.
     std::vector<Cell> pasted;
-    for (const std::string &ch : inputer::unicode::splitGraphemes(text)) {
+    for (const std::string &ch : ari_ime::unicode::splitGraphemes(text)) {
         if (isIgnoredPasteFormat(ch)) {
+            continue;
+        }
+        // Clipboard data is untrusted: drop clusters that are not well-formed
+        // UTF-8 instead of committing broken bytes to the client, and fold C1
+        // controls (validly encoded but invisible) in with the separators.
+        bool clusterValid = !ch.empty();
+        for (std::size_t off = 0; off < ch.size();) {
+            const ari_ime::unicode::CodePoint cp =
+                ari_ime::unicode::decode(ch, off);
+            if (!cp.valid) {
+                clusterValid = false;
+                break;
+            }
+            if (cp.value >= 0x80 && cp.value <= 0x9F) {
+                clusterValid = false;
+                break;
+            }
+            off += cp.length;
+        }
+        if (!clusterValid) {
+            if (!pasted.empty() && pasted.back().text != " ") {
+                pasted.push_back({false, " ", {}});
+            }
             continue;
         }
         if (isPasteSeparator(ch)) {
@@ -2561,6 +2652,11 @@ KeyResult Buffer::revertCellToEnglish() {
     }
     runLoaded_ = false;   // cell layout changed
     candOpen_ = false;    // back to caret mode, caret right after the exploded keys
+    // The raw-keys entry was consumed; drop its candidate list so a later
+    // reinterpret cannot reopen a window wired to the old selection run.
+    selCands_.clear();
+    selPage_ = 0;
+    highlight_ = 0;
     caretPos_ = at;
     selCursor_ = at - 1;
     return {true, false, {}, true};
@@ -2575,7 +2671,7 @@ KeyResult Buffer::reinterpretFromCell() {
                                         ? readingBody(cells_[selCursor_].reading).first
                                         : cells_[selCursor_].text;
     const bool symbolLed =
-        !currentKeys.empty() && inputer::isSymbolLikeZhuyinKey(currentKeys.front());
+        !currentKeys.empty() && ari_ime::isSymbolLikeZhuyinKey(currentKeys.front());
     if (selCursor_ > 0 && !symbolLed &&
         !isSingleAsciiLowerCell(cells_[selCursor_ - 1].text)) {
         return {true, false, {}, true};
@@ -2597,15 +2693,15 @@ KeyResult Buffer::reinterpretFromCell() {
     };
     auto rawUsesSymbolKey = [](const std::string &keys) {
         return std::any_of(keys.begin(), keys.end(), [](char c) {
-            return inputer::isSymbolLikeZhuyinKey(c);
+            return ari_ime::isSymbolLikeZhuyinKey(c);
         });
     };
     for (int j = selCursor_; j < limit; ++j) {
         std::string keys = cells_[j].chinese
                                ? readingBody(cells_[j].reading).first
                                : cells_[j].text;
-        std::string trial = inputer::canonicalKeys(raw + keys);
-        if (!inputer::isValidSyllable(trial, /*allowTone=*/true)) {
+        std::string trial = ari_ime::canonicalKeys(raw + keys);
+        if (!ari_ime::isValidSyllable(trial, /*allowTone=*/true)) {
             break; // this cell can't be part of the syllable; stop
         }
         raw += keys;
@@ -2671,8 +2767,15 @@ KeyResult Buffer::reinterpretFromCell() {
     // the cursor offset), not the candidate list (whose top item may be a phrase).
     auto chars = splitUtf8(zhuyin_.preedit());
     int k = selCursor_ - selRunStart_;
-    cells_[selCursor_].text =
-        k < static_cast<int>(chars.size()) ? chars[k] : found;
+    if (k < 0 || k >= static_cast<int>(chars.size())) {
+        // Chewing's fed preedit came up short for this offset. Bail out with a
+        // single-codepoint placeholder instead of storing the multi-byte raw
+        // syllable in a Chinese cell: applyRunToCells maps one codepoint per
+        // cell, and an oversized text here would leave stale glyphs behind.
+        cells_[selCursor_] = {true, "？", found};
+        return {true, false, {}, true};
+    }
+    cells_[selCursor_].text = chars[k];
     return {true, false, {}, true};
 }
 
@@ -2780,7 +2883,7 @@ KeyResult Buffer::openCandidatesAt(int cell, bool reinterpret) {
     const bool punctuation = isPunctuationText(cells_[cell].text);
     const bool symbolLikeZhuyin =
         punctuation && cells_[cell].text.size() == 1 &&
-        inputer::isSymbolLikeZhuyinKey(cells_[cell].text.front());
+        ari_ime::isSymbolLikeZhuyinKey(cells_[cell].text.front());
     if (cells_[cell].chinese ||
         (punctuation && (!reinterpret || !symbolLikeZhuyin))) {
         candOpen_ = true;
@@ -2790,6 +2893,14 @@ KeyResult Buffer::openCandidatesAt(int cell, bool reinterpret) {
     // English cell: only ↑ acts — fold it (+ the next few) back into a 注音
     // character and open its candidates. ↓ on English has nothing to pick.
     if (reinterpret) {
+        // reinterpretFromCell() early-outs without touching selCands_ on
+        // failure paths; a stale list from a previous picking session would
+        // reopen a window wired to the wrong cell and let the next pick land
+        // on stale run indices. Clear it so candOpen_ only reflects a fresh
+        // rebuild.
+        selCands_.clear();
+        selPage_ = 0;
+        highlight_ = 0;
         KeyResult r = reinterpretFromCell();
         candOpen_ = !selCands_.empty(); // false if nothing converted
         return r;
@@ -2876,9 +2987,9 @@ KeyResult Buffer::handlePicking(const fcitx::Key &key) {
 
     const int total = static_cast<int>(selCands_.size());
     const int totalPages =
-        (total + inputer::kCandPerPage - 1) / inputer::kCandPerPage;
-    int pageCount = std::min(inputer::kCandPerPage,
-                             total - selPage_ * inputer::kCandPerPage);
+        (total + ari_ime::kCandPerPage - 1) / ari_ime::kCandPerPage;
+    int pageCount = std::min(ari_ime::kCandPerPage,
+                             total - selPage_ * ari_ime::kCandPerPage);
 
     const bool shift = key.states().test(fcitx::KeyState::Shift);
 
@@ -2907,11 +3018,11 @@ KeyResult Buffer::handlePicking(const fcitx::Key &key) {
         } else if (selPage_ > 0) {
             --selPage_;
             highlight_ =
-                std::min(inputer::kCandPerPage, total - selPage_ * inputer::kCandPerPage) - 1;
+                std::min(ari_ime::kCandPerPage, total - selPage_ * ari_ime::kCandPerPage) - 1;
         } else {
             selPage_ = totalPages > 0 ? totalPages - 1 : 0;
             highlight_ =
-                std::min(inputer::kCandPerPage, total - selPage_ * inputer::kCandPerPage) - 1;
+                std::min(ari_ime::kCandPerPage, total - selPage_ * ari_ime::kCandPerPage) - 1;
         }
         if (highlight_ < 0) {
             highlight_ = 0;

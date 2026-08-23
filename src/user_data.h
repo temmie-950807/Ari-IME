@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#ifndef INPUTER_USER_DATA_H
-#define INPUTER_USER_DATA_H
+#ifndef ARI_IME_USER_DATA_H
+#define ARI_IME_USER_DATA_H
 
 #include <filesystem>
 #include <string>
 #include <system_error>
 #include <vector>
 
-namespace inputer {
+namespace ari_ime {
 
 // Directory holding per-user, mutable data for Ari IME. This contains only the
 // user's learned/personalized state, not libchewing's built-in dictionary.
@@ -124,6 +124,6 @@ inline constexpr int kLongPhraseMaxChars = 30;
 // are untouched.
 bool resetUserDictionary(std::error_code &ec);
 
-} // namespace inputer
+} // namespace ari_ime
 
-#endif // INPUTER_USER_DATA_H
+#endif // ARI_IME_USER_DATA_H

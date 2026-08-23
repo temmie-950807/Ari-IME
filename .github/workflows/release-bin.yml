@@ -25,7 +25,7 @@ jobs:
       - name: Verify tag and package versions
         run: |
           version="${GITHUB_REF_NAME#v}"
-          cmake_version="$(sed -n 's/^project(inputer VERSION \([^ ]*\) LANGUAGES CXX).*/\1/p' CMakeLists.txt)"
+          cmake_version="$(sed -n 's/^project(ari-ime VERSION \([^ ]*\) LANGUAGES CXX).*/\1/p' CMakeLists.txt)"
           pkgbuild_version="$(sed -n 's/^pkgver=//p' PKGBUILD)"
           srcinfo_version="$(sed -n 's/^[[:space:]]*pkgver = //p' .SRCINFO | head -n 1)"
           debian_version="$(sed -n '1s/^[^(]*(\([^)]*\)).*/\1/p' debian/changelog)"
@@ -46,7 +46,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           archive="fcitx5-ari-ime-bin-${version}-x86_64.tar.zst"
           DESTDIR="$PWD/stage" cmake --install build-release
-          strip --strip-unneeded stage/usr/lib/fcitx5/inputer.so
+          strip --strip-unneeded stage/usr/lib/fcitx5/ari-ime.so
           tar --zstd -cf "$archive" -C stage usr
           sha256sum "$archive" > "$archive.sha256"
           printf 'ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"

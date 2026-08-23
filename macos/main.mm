@@ -28,7 +28,7 @@ IMKCandidates *AriSharedCandidates(void) { return gCandidates; }
 //   CHEWING_PATH           libchewing's documented system-dictionary override,
 //                          consulted by chewing_new2(NULL, ...). Points at the
 //                          copy bundled in Resources so nothing is installed.
-//   INPUTER_USER_DATA_DIR  first-choice override in src/user_data.cpp, ahead of
+//   ARI_IME_USER_DATA_DIR  first-choice override in src/user_data.cpp, ahead of
 //                          the XDG paths that do not belong on macOS.
 //
 // Setting them process-wide is safe here in a way it would not be inside a
@@ -55,7 +55,7 @@ static int RunSelfTest(void) {
     NSBundle *bundle = NSBundle.mainBundle;
 
     const char *dictionary = getenv("CHEWING_PATH");
-    const std::string userData = inputer::userDataDir().string();
+    const std::string userData = ari_ime::userDataDir().string();
     printf("bundle          : %s\n", bundle.bundlePath.UTF8String);
     printf("CHEWING_PATH    : %s\n", dictionary ?: "(unset)");
     printf("user data dir   : %s\n", userData.c_str());
@@ -83,10 +83,10 @@ static int RunSelfTest(void) {
     // How many layouts work depends on the bundled libchewing, so report it
     // rather than assuming all eleven are offered.
     NSMutableArray<NSString *> *layouts = [NSMutableArray array];
-    for (int i = 0; i <= (int)inputer::KeyboardLayout::Colemak; ++i) {
-        const auto layout = static_cast<inputer::KeyboardLayout>(i);
-        if (inputer::keyboardLayoutAvailable(layout)) {
-            [layouts addObject:@(inputer::keyboardLayoutName(layout))];
+    for (int i = 0; i <= (int)ari_ime::KeyboardLayout::Colemak; ++i) {
+        const auto layout = static_cast<ari_ime::KeyboardLayout>(i);
+        if (ari_ime::keyboardLayoutAvailable(layout)) {
+            [layouts addObject:@(ari_ime::keyboardLayoutName(layout))];
         }
     }
     printf("layouts (%2lu/11) : %s\n", (unsigned long)layouts.count,
@@ -184,7 +184,7 @@ int main(int argc, const char *argv[]) {
             return 1;
         }
 
-        // A single column of nine rows matches inputer::kCandPerPage, and the
+        // A single column of nine rows matches ari_ime::kCandPerPage, and the
         // core hands out exactly one page at a time, so the panel never needs
         // to scroll or paginate on its own.
         gCandidates = [[IMKCandidates alloc]

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#ifndef INPUTER_LAYOUT_H
-#define INPUTER_LAYOUT_H
+#ifndef ARI_IME_LAYOUT_H
+#define ARI_IME_LAYOUT_H
 
 #include <fcitx-config/enum.h>
 #include <fcitx-config/rawconfig.h>
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace inputer {
+namespace ari_ime {
 
 inline constexpr int kNoZhuyinSlot = -1;
 inline constexpr int kToneSlot = 3;
@@ -104,6 +104,6 @@ bool needsBodyBeforeToneCompletion(KeyboardLayout layout);
 // enumeration cost.
 std::vector<SyllableKeySequence> syllableKeySequences(KeyboardLayout layout);
 
-} // namespace inputer
+} // namespace ari_ime
 
-#endif // INPUTER_LAYOUT_H
+#endif // ARI_IME_LAYOUT_H

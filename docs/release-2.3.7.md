@@ -10,7 +10,7 @@ as a hard-priority list. `Shift+Delete` now removes that marker as well as the
 matching personal entry, so a forgotten choice stays forgotten after restart.
 
 The installed `ari-ime-enable --make-default` command now reloads a running
-Fcitx5, starts it when a graphical session is available, selects `inputer`, and
+Fcitx5, starts it when a graphical session is available, selects `ari-ime`, and
 verifies the active name. Headless shells receive an explicit next-step error
 instead of a false success.
 

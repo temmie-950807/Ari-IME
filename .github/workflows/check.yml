@@ -66,12 +66,12 @@ jobs:
 
       - name: Run release checks
         run: >
-          INPUTER_CHECK_MODE=release
-          INPUTER_BUILD_TYPE=${{ matrix.build_type }}
-          INPUTER_BUILD_DIR=build-${{ matrix.compiler.name }}-${{ matrix.build_type }}
-          INPUTER_CC=${{ matrix.compiler.cc }}
-          INPUTER_CXX=${{ matrix.compiler.cxx }}
-          INPUTER_CXX_COMPILER_LAUNCHER=ccache
+          ARI_IME_CHECK_MODE=release
+          ARI_IME_BUILD_TYPE=${{ matrix.build_type }}
+          ARI_IME_BUILD_DIR=build-${{ matrix.compiler.name }}-${{ matrix.build_type }}
+          ARI_IME_CC=${{ matrix.compiler.cc }}
+          ARI_IME_CXX=${{ matrix.compiler.cxx }}
+          ARI_IME_CXX_COMPILER_LAUNCHER=ccache
           scripts/check.sh
 
   sanitize:
@@ -116,7 +116,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run sanitizer checks
-        run: INPUTER_CHECK_MODE=sanitize INPUTER_CXX_COMPILER_LAUNCHER=ccache scripts/check.sh
+        run: ARI_IME_CHECK_MODE=sanitize ARI_IME_CXX_COMPILER_LAUNCHER=ccache scripts/check.sh
 
   fuzz:
     name: Bounded Fuzz
@@ -162,10 +162,10 @@ jobs:
 
       - name: Run bounded fuzz checks
         env:
-          INPUTER_CHECK_MODE: fuzz
-          INPUTER_CXX_COMPILER_LAUNCHER: ccache
-          INPUTER_FUZZ_RUNS: 256
-          INPUTER_FUZZ_ARTIFACT_DIR: fuzz-artifacts
+          ARI_IME_CHECK_MODE: fuzz
+          ARI_IME_CXX_COMPILER_LAUNCHER: ccache
+          ARI_IME_FUZZ_RUNS: 256
+          ARI_IME_FUZZ_ARTIFACT_DIR: fuzz-artifacts
         run: scripts/check.sh
 
       - name: Upload fuzz crash artifacts
@@ -218,4 +218,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run package simulation
-        run: INPUTER_CHECK_MODE=package CMAKE_CXX_COMPILER_LAUNCHER=ccache scripts/check.sh
+        run: ARI_IME_CHECK_MODE=package CMAKE_CXX_COMPILER_LAUNCHER=ccache scripts/check.sh

@@ -4,7 +4,7 @@ Comment=Smart mixed Bopomofo/English input method (no mode switching)
 Category=InputMethod
 Version=@PROJECT_VERSION@
 Type=SharedLibrary
-Library=inputer
+Library=ari-ime
 Configurable=True
 OnDemand=True
 

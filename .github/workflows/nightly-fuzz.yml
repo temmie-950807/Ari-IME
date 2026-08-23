@@ -60,10 +60,10 @@ jobs:
 
       - name: Run long fuzz checks
         env:
-          INPUTER_CHECK_MODE: fuzz
-          INPUTER_CXX_COMPILER_LAUNCHER: ccache
-          INPUTER_FUZZ_RUNS: ${{ github.event.inputs.runs || '5000' }}
-          INPUTER_FUZZ_ARTIFACT_DIR: fuzz-artifacts
+          ARI_IME_CHECK_MODE: fuzz
+          ARI_IME_CXX_COMPILER_LAUNCHER: ccache
+          ARI_IME_FUZZ_RUNS: ${{ github.event.inputs.runs || '5000' }}
+          ARI_IME_FUZZ_ARTIFACT_DIR: fuzz-artifacts
         run: scripts/check.sh
 
       - name: Upload fuzz crash artifacts

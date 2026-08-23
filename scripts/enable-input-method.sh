@@ -23,11 +23,11 @@ Options:
   -h, --help       show this help
 
 Environment:
-  INPUTER_FCITX_PROFILE  same as --profile
+  ARI_IME_FCITX_PROFILE  same as --profile
 EOF
 }
 
-profile="${INPUTER_FCITX_PROFILE:-}"
+profile="${ARI_IME_FCITX_PROFILE:-}"
 make_default=0
 assume_yes=0
 dry_run=0
@@ -74,6 +74,24 @@ if [[ -e "$profile" && ! -f "$profile" ]]; then
     exit 1
 fi
 
+# -e/-f follow symlinks, so a symlinked profile (GNU Stow, chezmoi, manual
+# ln -s) passes the regular-file check above. Resolve it once: writing over
+# the link itself would silently detach the user's config management.
+if [[ -L "$profile" ]]; then
+    resolved="$(readlink -f -- "$profile")" || {
+        printf 'Cannot resolve Fcitx5 profile symlink: %s\n' "$profile" >&2
+        exit 1
+    }
+    if [[ ! -f "$resolved" ]]; then
+        printf 'Fcitx5 profile symlink target is not a regular file: %s\n' \
+            "$resolved" >&2
+        exit 1
+    fi
+    printf 'Fcitx5 profile is a symlink to %s; editing the target\n' \
+        "$resolved"
+    profile="$resolved"
+fi
+
 profile_dir="$(dirname -- "$profile")"
 group_id=""
 if [[ -s "$profile" ]]; then
@@ -104,14 +122,14 @@ if [[ -s "$profile" ]]; then
     fi
 fi
 
-inputer_present=0
+ari_present=0
 if [[ -s "$profile" ]] && awk '
     /^\[Groups\/[0-9]+\/Items\/[0-9]+\]$/ { in_item = 1; next }
     /^\[/ { in_item = 0 }
-    in_item && $0 == "Name=inputer" { found = 1 }
+    in_item && $0 == "Name=ari-ime" { found = 1 }
     END { exit(found ? 0 : 1) }
 ' "$profile"; then
-    inputer_present=1
+    ari_present=1
 fi
 
 next_item=0
@@ -129,7 +147,7 @@ if [[ "$make_default" -eq 1 ]]; then
     if [[ -s "$profile" ]] && awk -v section="[$group_section]" '
         $0 == section { in_group = 1; next }
         in_group && /^\[/ { in_group = 0 }
-        in_group && $0 == "DefaultIM=inputer" { found = 1 }
+        in_group && $0 == "DefaultIM=ari-ime" { found = 1 }
         END { exit(found ? 0 : 1) }
     ' "$profile"; then
         set_default_needed=0
@@ -166,12 +184,12 @@ if [[ -s "$profile" ]]; then
 fi
 
 changed=0
-if [[ "$inputer_present" -eq 0 || "$set_default_needed" -eq 1 ||
+if [[ "$ari_present" -eq 0 || "$set_default_needed" -eq 1 ||
       "$group_order_needed" -eq 1 || ! -s "$profile" ]]; then
     changed=1
 fi
 
-if [[ "$inputer_present" -eq 1 ]]; then
+if [[ "$ari_present" -eq 1 ]]; then
     printf 'Ari IME is already present in %s\n' "$profile"
 else
     printf 'Ari IME will be added to [%s/Items/%s]\n' "$group_section" "$next_item"
@@ -232,7 +250,7 @@ else
             }
             in_group && /^\[/ {
                 if (set_default == 1 && replaced == 0) {
-                    print "DefaultIM=inputer"
+                    print "DefaultIM=ari-ime"
                     replaced = 1
                 }
                 in_group = 0
@@ -256,7 +274,7 @@ else
             }
             in_group && set_default == 1 && /^DefaultIM=/ {
                 if (replaced == 0) {
-                    print "DefaultIM=inputer"
+                    print "DefaultIM=ari-ime"
                     replaced = 1
                 }
                 next
@@ -264,7 +282,7 @@ else
             { print }
             END {
                 if (in_group && set_default == 1 && replaced == 0) {
-                    print "DefaultIM=inputer"
+                    print "DefaultIM=ari-ime"
                 }
                 if (in_order && ensure_order == 1 && order_found == 0) {
                     print order_index "=" group_name
@@ -279,7 +297,7 @@ else
     else
         default_im="keyboard-us"
         if [[ "$make_default" -eq 1 ]]; then
-            default_im=inputer
+            default_im=ari-ime
         fi
         {
             printf '%s\n' '[Groups/0]'
@@ -299,11 +317,11 @@ else
         } >"$temp_profile"
     fi
 
-    if [[ "$inputer_present" -eq 0 ]]; then
+    if [[ "$ari_present" -eq 0 ]]; then
         {
             printf '\n[Groups/%s/Items/%s]\n' "$group_id" "$next_item"
             printf '%s\n' '# Name'
-            printf '%s\n' 'Name=inputer'
+            printf '%s\n' 'Name=ari-ime'
             printf '%s\n' '# Layout'
             printf '%s\n' 'Layout='
         } >>"$temp_profile"
@@ -374,16 +392,16 @@ if ! wait_for_fcitx; then
     exit 1
 fi
 
-if ! fcitx5-remote -s inputer >/dev/null 2>&1; then
+if ! fcitx5-remote -s ari-ime >/dev/null 2>&1; then
     printf '%s\n' \
         'Fcitx5 is running, but Ari IME could not be selected.' \
-        'Verify that the package installed inputer.so and retry.' \
+        'Verify that the package installed ari-ime.so and retry.' \
         >&2
     exit 1
 fi
 
 active_im="$(fcitx5-remote -n 2>/dev/null || true)"
-if [[ "$active_im" != "inputer" ]]; then
+if [[ "$active_im" != "ari-ime" ]]; then
     printf 'Fcitx5 selected an unexpected input method: %s\n' \
         "${active_im:-<none>}" >&2
     exit 1

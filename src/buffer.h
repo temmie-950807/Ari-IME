@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Kaiyasi
-#ifndef INPUTER_BUFFER_H
-#define INPUTER_BUFFER_H
+#ifndef ARI_IME_BUFFER_H
+#define ARI_IME_BUFFER_H
 
 #include <string>
+#include <deque>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -15,12 +16,14 @@
 
 // Result of feeding one key into the state machine, applied by the engine.
 struct KeyResult {
-    KeyResult(bool handled = false, bool hasCommit = false,
-              std::string commitText = {}, bool updateUI = false,
-              bool notifyMode = false, std::string notification = {})
-        : handled(handled), hasCommit(hasCommit),
-          commitText(std::move(commitText)), updateUI(updateUI),
-          notifyMode(notifyMode), notification(std::move(notification)) {}
+    // Parameters carry an Arg suffix so they do not shadow the members
+    // (-Wshadow); brace-initialization at every return site keeps working.
+    KeyResult(bool handledArg = false, bool hasCommitArg = false,
+              std::string commitTextArg = {}, bool updateUIArg = false,
+              bool notifyModeArg = false, std::string notificationArg = {})
+        : handled(handledArg), hasCommit(hasCommitArg),
+          commitText(std::move(commitTextArg)), updateUI(updateUIArg),
+          notifyMode(notifyModeArg), notification(std::move(notificationArg)) {}
 
     bool handled = false;      // If false, let the application handle the key.
     bool hasCommit = false;    // commitText should be committed to the client.
@@ -77,6 +80,10 @@ public:
 
     std::string preeditText() const;
     std::vector<std::string> candidates() const;
+    // Bopomofo symbols of the live pending (incomplete) syllable; empty when
+    // nothing is pending or the engine is down. Tone keys are stripped, so
+    // the hint shows the untoned body only.
+    std::string pendingSyllableHint() const;
     // Read-only recommendation data for diagnostics and tests. The frontend
     // does not display it automatically; Down opens the real picker explicitly.
     std::vector<std::string> previewCandidates();
@@ -124,7 +131,7 @@ public:
         return true;
     }
     bool setChinesePunctuationShortcut(
-        inputer::ChinesePunctuationShortcut shortcut) {
+        ari_ime::ChinesePunctuationShortcut shortcut) {
         if (punctuationShortcut_ == shortcut) {
             return false;
         }
@@ -138,7 +145,7 @@ public:
         spaceCandidateMode_ = on;
         return true;
     }
-    bool setKeyboardLayout(inputer::KeyboardLayout layout);
+    bool setKeyboardLayout(ari_ime::KeyboardLayout layout);
     // The frontend disables learning for password and other sensitive fields.
     void setLearningAllowed(bool allowed) { learningAllowed_ = allowed; }
 
@@ -166,7 +173,7 @@ public:
     bool forgetUserPhrase(const std::string &phrase) {
         return zhuyin_.forgetUserPhrase(phrase) > 0;
     }
-    inputer::KeyboardLayout keyboardLayout() const { return layout_; }
+    ari_ime::KeyboardLayout keyboardLayout() const { return layout_; }
 
 private:
     enum class Token { Chinese, English };
@@ -339,11 +346,11 @@ private:
 
     bool forcedEnglish_ = false;
     bool fullWidthPunct_ = false;
-    inputer::ChinesePunctuationShortcut punctuationShortcut_ =
-        inputer::ChinesePunctuationShortcut::ControlShift;
+    ari_ime::ChinesePunctuationShortcut punctuationShortcut_ =
+        ari_ime::ChinesePunctuationShortcut::ControlShift;
     bool spaceCandidateMode_ = false;
     bool learningAllowed_ = true;
-    inputer::KeyboardLayout layout_ = inputer::KeyboardLayout::Default;
+    ari_ime::KeyboardLayout layout_ = ari_ime::KeyboardLayout::Default;
     Token token_ = Token::Chinese;
     // Mutually exclusive with selecting_: the mode is only entered from an
     // empty pre-edit and always leaves through leaveTemplateMode().
@@ -369,9 +376,11 @@ private:
     int highlight_ = 0;                  // highlighted candidate within the page
     // Readings from text Ari has already composed in this input context. They
     // make the common reconversion path immediate; unknown external text falls
-    // back to the bounded libchewing reverse lookup.
+    // back to the bounded libchewing reverse lookup. Insertion order is kept
+    // so eviction is FIFO rather than an arbitrary unordered_map element.
     std::unordered_map<std::string, std::string> knownReadings_;
+    std::deque<std::string> knownReadingsOrder_;
     Zhuyin zhuyin_;                      // live Chinese run; scratch while selecting
 };
 
-#endif // INPUTER_BUFFER_H
+#endif // ARI_IME_BUFFER_H
