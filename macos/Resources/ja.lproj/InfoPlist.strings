@@ -1,0 +1,7 @@
+/* The input-source menu looks the mode up by its identifier. Without this the
+   menu falls back to showing the raw key, which is why it read
+   "org.kaiyasi.inputmethod.AriIME.Zhuyin". */
+"org.kaiyasi.inputmethod.AriIME.Zhuyin" = "Ari-IME";
+
+/* Same reason: an unlocalised CFBundleName leaks the key name itself. */
+"CFBundleName" = "Ari-IME";

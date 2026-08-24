@@ -92,6 +92,35 @@ static int RunSelfTest(void) {
     printf("layouts (%2lu/11) : %s\n", (unsigned long)layouts.count,
            [layouts componentsJoinedByString:@", "].UTF8String);
 
+    // Without a localised name the input-source menu shows the mode identifier
+    // and the literal string "CFBundleName"; without the icon it shows an empty
+    // tile. Both are only visible once the system loads the bundle, so they are
+    // easy to ship broken.
+    NSString *modeID =
+        [bundle.bundleIdentifier stringByAppendingString:@".Zhuyin"];
+    // table:nil would look in Localizable.strings; the keys here come from
+    // Info.plist, so they live in InfoPlist.strings.
+    NSString *localised = [bundle localizedStringForKey:modeID
+                                                  value:@""
+                                                  table:@"InfoPlist"];
+    const BOOL named = localised.length > 0 && ![localised isEqualToString:modeID];
+    printf("menu name       : %s%s\n",
+           named ? localised.UTF8String : modeID.UTF8String,
+           named ? "" : "   (NOT LOCALISED)");
+    failures += named ? 0 : 1;
+
+    NSString *iconName =
+        [bundle objectForInfoDictionaryKey:@"ComponentInputModeDict"]
+            ? @"ari.pdf"
+            : nil;
+    const BOOL haveIcon =
+        iconName != nil &&
+        [NSFileManager.defaultManager
+            fileExistsAtPath:[bundle.resourcePath
+                                 stringByAppendingPathComponent:iconName]];
+    printf("menu icon       : %s\n", haveIcon ? "found" : "MISSING");
+    failures += haveIcon ? 0 : 1;
+
     for (const unsigned char c : std::string("su3")) {
         buffer.handleKey(fcitx::Key(static_cast<fcitx::KeySym>(c)));
     }

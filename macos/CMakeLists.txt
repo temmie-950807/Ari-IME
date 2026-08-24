@@ -95,6 +95,14 @@ add_custom_command(TARGET AriIME POST_BUILD
             "$<TARGET_BUNDLE_CONTENT_DIR:AriIME>/Resources/chewing-data"
     COMMENT "Bundling libchewing dictionary"
 )
+# Localised names for the input-source menu. Without a .lproj the menu shows
+# the mode's identifier and the literal string "CFBundleName" instead.
+add_custom_command(TARGET AriIME POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_CURRENT_LIST_DIR}/Resources"
+            "$<TARGET_BUNDLE_CONTENT_DIR:AriIME>/Resources"
+    COMMENT "Bundling localised names"
+)
 # Menu-bar icon. Regenerate with: swift macos/make-icon.swift macos/ari.pdf
 add_custom_command(TARGET AriIME POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy

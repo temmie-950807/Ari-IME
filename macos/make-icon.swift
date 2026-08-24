@@ -6,6 +6,11 @@
 // nothing but rectangles, so redrawing it here avoids depending on rsvg or any
 // other converter that is not already on a Mac.
 //
+// The menu bar treats this as a template image: only the alpha channel is read,
+// and the system colours it to match the bar. So the artwork is drawn as a
+// silhouette — the SVG's cream background would otherwise fill the whole square
+// with opaque pixels and render as a solid black tile.
+//
 // Usage: swift macos/make-icon.swift macos/ari.pdf
 
 import AppKit
@@ -26,8 +31,9 @@ func color(_ hex: UInt32) -> CGColor {
             blue: CGFloat(hex & 0xff) / 255,
             alpha: 1)
 }
-let cream = color(0xf7f4ed)
-let teal = color(0x2f5d62)
+// Any opaque colour reads the same once the system applies its template
+// treatment; black keeps the PDF legible on its own if opened directly.
+let ink = color(0x000000)
 
 context.beginPDFPage(nil)
 // SVG measures y downwards from the top; PDF measures it upwards from the
@@ -44,19 +50,20 @@ func fill(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat,
     context.fillPath()
 }
 
-fill(0, 0, side, side, radius: 14, cream)
-fill(14, 14, 36, 36, teal)
+// A ring rather than a filled square: the enclosed area has to stay
+// transparent for the glyph inside it to be visible at all.
+context.setStrokeColor(ink)
+context.setLineWidth(3)
+context.addPath(CGPath(roundedRect: CGRect(x: 9, y: 9, width: 46, height: 46),
+                       cornerWidth: 10, cornerHeight: 10, transform: nil))
+context.strokePath()
 
-context.setStrokeColor(cream)
-context.setLineWidth(2)
-context.stroke(CGRect(x: 18, y: 18, width: 28, height: 28))
-
-// The 注 glyph, as the same seven bars the SVG uses.
-for bar in [(23.0, 21.0, 4.0, 6.0), (22.0, 31.0, 4.0, 4.0), (23.0, 39.0, 4.0, 6.0),
-            (31.0, 20.0, 4.0, 24.0), (29.0, 24.0, 13.0, 4.0),
-            (29.0, 32.0, 13.0, 4.0), (29.0, 40.0, 13.0, 4.0)] {
+// The 注 glyph, as the same seven bars the SVG uses, scaled to the ring.
+for bar in [(19.0, 19.0, 4.0, 7.0), (18.0, 30.0, 4.0, 4.0), (19.0, 39.0, 4.0, 7.0),
+            (30.0, 18.0, 4.0, 28.0), (28.0, 22.0, 15.0, 4.0),
+            (28.0, 31.0, 15.0, 4.0), (28.0, 40.0, 15.0, 4.0)] {
     fill(CGFloat(bar.0), CGFloat(bar.1), CGFloat(bar.2), CGFloat(bar.3),
-         radius: 1, cream)
+         radius: 1, ink)
 }
 
 context.endPDFPage()

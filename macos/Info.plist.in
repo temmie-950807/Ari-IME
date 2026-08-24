@@ -2,8 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Must name a directory that exists under Resources, or the fallback
+	     lookup fails and the menu shows raw keys. -->
 	<key>CFBundleDevelopmentRegion</key>
-	<string>zh_TW</string>
+	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>@ARI_EXECUTABLE_NAME@</string>
 	<key>CFBundleIdentifier</key>
@@ -11,13 +13,20 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Ari IME</string>
+	<string>Ari-IME</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>@ARI_VERSION@</string>
 	<key>CFBundleVersion</key>
 	<string>@ARI_VERSION@</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hant</string>
+		<string>zh-Hans</string>
+		<string>ja</string>
+	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>LSUIElement</key>
