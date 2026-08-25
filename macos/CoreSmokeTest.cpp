@@ -239,6 +239,32 @@ int main(int argc, char **argv) {
         setenv("ARI_IME_USER_DATA_DIR", argv[2], 1);
     }
 
+    // In the candidate window the bare arrows turn pages, which is what the
+    // list is mostly used for. Stepping between characters is the rarer action
+    // and lives on Control+arrow.
+    {
+        Buffer buffer;
+        type(buffer, "su3cl3");
+        buffer.handleKey(fcitx::Key(FcitxKey_Home));
+        buffer.handleKey(fcitx::Key(FcitxKey_Down));
+        assert(buffer.isPicking() && buffer.candidatePageCount() > 1);
+        assert(buffer.candidatePage() == 1 && buffer.selectionChar() == 0);
+
+        buffer.handleKey(fcitx::Key(FcitxKey_Right));
+        assert(buffer.candidatePage() == 2 && "→ turns the page");
+        assert(buffer.selectionChar() == 0 && "and stays on the same character");
+
+        buffer.handleKey(fcitx::Key(FcitxKey_Left));
+        assert(buffer.candidatePage() == 1 && "← turns back");
+
+        const fcitx::KeyStates ctrl{fcitx::KeyState::Ctrl};
+        buffer.handleKey(fcitx::Key(FcitxKey_Right, ctrl));
+        assert(buffer.isPicking() && buffer.selectionChar() == 1 &&
+               "Control+→ steps to the next character");
+        buffer.handleKey(fcitx::Key(FcitxKey_Left, ctrl));
+        assert(buffer.selectionChar() == 0);
+    }
+
     // --- Text templates ---------------------------------------------------
     //
     // Content lives on one line with a two-character escape for newlines, so

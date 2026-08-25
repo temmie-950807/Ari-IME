@@ -2921,23 +2921,18 @@ KeyResult Buffer::handlePicking(const fcitx::Key &key) {
         !key.states().testAny(fcitx::KeyStates{
             fcitx::KeyState::Shift, fcitx::KeyState::Alt,
             fcitx::KeyState::Super});
-    if (ctrlNavigation &&
-        (sym == FcitxKey_Left || sym == FcitxKey_Right)) {
-        candOpen_ = false;
-        caretPos_ = selCursor_;
-        return moveCaretByPhrase(sym == FcitxKey_Left ? -1 : 1);
-    }
-
-    // ←/→ step to the adjacent character's candidates (fix several in a row).
-    if (sym == FcitxKey_Left) {
+    // Control+←/→ steps to the adjacent character's candidates, for fixing
+    // several characters in a row. This is where that used to live unmodified,
+    // before the bare arrows were given to paging below.
+    if (ctrlNavigation && sym == FcitxKey_Left) {
         return moveSelCursor(-1);
     }
-    if (sym == FcitxKey_Right) {
+    if (ctrlNavigation && sym == FcitxKey_Right) {
         if (selCursor_ + 1 < static_cast<int>(cells_.size())) {
             return moveSelCursor(+1);
         }
         // The caret is allowed to sit just after the final cell. Leaving the
-        // candidate window here makes Right a natural "append at end" action
+        // candidate window here makes it a natural "append at end" action
         // instead of trapping the user on the last character.
         candOpen_ = false;
         caretPos_ = static_cast<int>(cells_.size());
@@ -2945,6 +2940,19 @@ KeyResult Buffer::handlePicking(const fcitx::Key &key) {
         selPage_ = 0;
         highlight_ = 0;
         zhuyin_.closeCandidates();
+        return {true, false, {}, true};
+    }
+
+    // ←/→ turn the pages. Paging is what a candidate list is mostly used for,
+    // so it gets the unmodified keys; stepping between characters is the rarer
+    // action and moves to Control+←/→ above. PageUp/PageDown still work.
+    if (sym == FcitxKey_Left || sym == FcitxKey_Right) {
+        const int pages = candidatePageCount();
+        if (pages > 1) {
+            selPage_ = sym == FcitxKey_Right ? (selPage_ + 1) % pages
+                                             : (selPage_ + pages - 1) % pages;
+            highlight_ = 0;
+        }
         return {true, false, {}, true};
     }
     if (sym == FcitxKey_Home || sym == FcitxKey_Begin) {

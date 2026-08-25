@@ -410,7 +410,29 @@ static NSTextField *gHUDLabel = nil;
     // IMKCandidates raises CandidateWindowNoCandidatesException if this returns
     // nothing while the panel is being shown, so it must stay in step with what
     // -refreshCandidateWindow feeds to setCandidateData:.
-    return [self currentCandidateStrings];
+    return [self numberedCandidates];
+}
+
+// The core selects by number key, so the numbers have to be on screen. The
+// panel will not put them there: its own numbering is tied to the identifier
+// machinery that already proved unreliable here, so they are drawn into the
+// text where they cannot be lost.
+- (NSArray<NSString *> *)numberedCandidates {
+    NSArray<NSString *> *page = [self currentCandidateStrings];
+    NSMutableArray<NSString *> *numbered =
+        [NSMutableArray arrayWithCapacity:page.count];
+    for (NSUInteger i = 0; i < page.count; ++i) {
+        // Only the first nine are reachable by key; a longer page would be a
+        // core change, but the labels should not promise what does not work.
+        if (i < 9) {
+            [numbered addObject:[NSString stringWithFormat:@"%lu. %@",
+                                                           (unsigned long)i + 1,
+                                                           page[i]]];
+        } else {
+            [numbered addObject:[@"   " stringByAppendingString:page[i]]];
+        }
+    }
+    return numbered;
 }
 
 - (NSArray<NSString *> *)currentCandidateStrings {
@@ -437,7 +459,7 @@ static NSTextField *gHUDLabel = nil;
 
     // The core owns paging: candidates() only ever returns the current page, so
     // PageUp/PageDown simply replace the whole array.
-    [panel setCandidateData:[self currentCandidateStrings]];
+    [panel setCandidateData:[self numberedCandidates]];
     [panel updateCandidates];
     if (!panel.isVisible) {
         [panel showCandidates];
@@ -468,9 +490,15 @@ static NSTextField *gHUDLabel = nil;
 // same protection the Fcitx5 front end gets from selectCandidate's expected-text
 // overload.
 - (void)candidateSelected:(NSAttributedString *)candidateString {
-    NSArray<NSString *> *page = [self currentCandidateStrings];
-    const NSUInteger index = [page indexOfObject:candidateString.string];
+    // Compare against the numbered forms that were handed to the panel, so the
+    // label never has to be parsed back off.
+    const NSUInteger index =
+        [[self numberedCandidates] indexOfObject:candidateString.string];
     if (index == NSNotFound) {
+        return;
+    }
+    NSArray<NSString *> *page = [self currentCandidateStrings];
+    if (index >= page.count) {
         return;
     }
     const std::string expected = page[index].UTF8String;

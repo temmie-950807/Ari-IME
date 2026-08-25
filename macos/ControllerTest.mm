@@ -164,9 +164,15 @@ void resetSession(void) {
 // Candidates come back as attributed strings, because the controller paints
 // the core's highlight into them itself.
 NSString *plain(id candidate) {
-    return [candidate isKindOfClass:NSAttributedString.class]
-               ? [(NSAttributedString *)candidate string]
-               : candidate;
+    NSString *text = [candidate isKindOfClass:NSAttributedString.class]
+                         ? [(NSAttributedString *)candidate string]
+                         : candidate;
+    // Rows are labelled "1. 你" so the number keys have something to match on
+    // screen; the tests care about the candidate itself.
+    NSRange dot = [text rangeOfString:@". "];
+    return dot.location != NSNotFound && dot.location <= 1
+               ? [text substringFromIndex:NSMaxRange(dot)]
+               : text;
 }
 
 void expectEqual(NSString *actual, NSString *expected, const char *what) {
@@ -297,10 +303,12 @@ int main(void) {
         type(@"su3");
         press(kVK_DownArrow);
         NSArray *page = [gController candidates:gClient];
-        NSString *clicked = plain(page[2]);
+        // A click hands back exactly what the panel displayed, numbering and all.
+        NSString *clicked = page[2];
         [gController candidateSelected:[[NSAttributedString alloc]
                                            initWithString:clicked]];
-        expectEqual(gClient.markedText, clicked, "click picks the same entry");
+        expectEqual(gClient.markedText, plain(clicked),
+                    "click picks the same entry");
         // A click carrying text that is no longer on the page must be ignored.
         NSString *before = gClient.markedText;
         [gController candidateSelected:[[NSAttributedString alloc]
