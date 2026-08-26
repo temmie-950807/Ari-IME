@@ -265,6 +265,36 @@ int main(int argc, char **argv) {
         assert(buffer.selectionChar() == 0);
     }
 
+    // Picking on a later page must land on the row the user can see.
+    // chewing_cand_choose_by_index() indexes the whole candidate list, but the
+    // old code paged libchewing first and then passed a page-relative index, so
+    // every pick past page 1 silently chose from page 1 instead.
+    {
+        Buffer buffer;
+        type(buffer, "su3");
+        buffer.handleKey(fcitx::Key(FcitxKey_Down));
+        assert(buffer.candidatePageCount() > 1);
+        buffer.handleKey(fcitx::Key(FcitxKey_Right));
+        assert(buffer.candidatePage() == 2);
+
+        const std::vector<std::string> page = buffer.candidates();
+        assert(page.size() >= 2);
+        buffer.handleKey(fcitx::Key(static_cast<fcitx::KeySym>('2')));
+        assert(buffer.preeditText() == page[1] &&
+               "the number key picks the row printed next to it");
+    }
+    {
+        Buffer buffer;
+        type(buffer, "su3");
+        buffer.handleKey(fcitx::Key(FcitxKey_Down));
+        buffer.handleKey(fcitx::Key(FcitxKey_Right));
+        const std::vector<std::string> page = buffer.candidates();
+        assert(!page.empty());
+        buffer.handleKey(fcitx::Key(FcitxKey_Return));
+        assert(buffer.preeditText() == page[0] &&
+               "Enter picks the highlighted row on the current page");
+    }
+
     // --- Text templates ---------------------------------------------------
     //
     // Content lives on one line with a two-character escape for newlines, so

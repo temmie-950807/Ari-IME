@@ -132,12 +132,11 @@ public:
     // callers must treat the result as an all-or-nothing operation.
     std::vector<std::string> readingsForText(const std::string &text);
 
-    // Pagination info / control for a manually-highlighted candidate cursor.
-    int candPerPage() const;
+    // Reporting only (ari-ime-dict info). Do NOT reintroduce page-stepping
+    // helpers here: candidates are addressed by absolute index throughout, and
+    // mixing the two is what broke picking past the first page.
     int candCurrentPage() const;
     int candTotalPage() const;
-    void nextPage();
-    void prevPage();
 
     // Drop the pending (incomplete) bopomofo syllable, keeping converted chars.
     void cleanBopomofo();

@@ -1897,12 +1897,12 @@ void Buffer::chineseRunAround(int idx, int &start, int &end) const {
 }
 
 void Buffer::chooseGlobalCandidate(int globalIdx) {
-    int perPage = zhuyin_.candPerPage();
-    int targetPage = perPage > 0 ? globalIdx / perPage : 0;
-    while (zhuyin_.candCurrentPage() < targetPage) {
-        zhuyin_.nextPage();
-    }
-    zhuyin_.chooseCandidate(perPage > 0 ? globalIdx % perPage : globalIdx);
+    // chewing_cand_choose_by_index() indexes the WHOLE candidate list, exactly
+    // like chewing_cand_string_by_index_static() which pageCandidates() reads.
+    // Paging to the candidate first and then passing a page-relative index made
+    // every pick past the first page land on the wrong character; it only
+    // looked right on page 0, where the two indices coincide.
+    zhuyin_.chooseCandidate(globalIdx);
 }
 
 void Buffer::buildSelCands() {

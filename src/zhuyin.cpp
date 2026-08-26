@@ -763,12 +763,8 @@ int Zhuyin::promoteUserPhrases() {
         for (int i = 0; i < best.down; ++i) {
             handleDown();
         }
-        const int perPage = candPerPage();
-        const int targetPage = perPage > 0 ? best.index / perPage : 0;
-        while (candCurrentPage() < targetPage) {
-            nextPage();
-        }
-        chooseCandidate(perPage > 0 ? best.index % perPage : best.index);
+        // Absolute index: chewing_cand_choose_by_index() spans the whole list.
+        chooseCandidate(best.index);
         ++applied;
     }
 
@@ -829,32 +825,12 @@ int Zhuyin::cursorPos() const {
     return ctx_ ? chewing_cursor_Current(ctx_) : 0;
 }
 
-int Zhuyin::candPerPage() const {
-    if (!ctx_) {
-        return 9;
-    }
-    int n = chewing_cand_ChoicePerPage(ctx_);
-    return n > 0 ? n : 9;
-}
-
 int Zhuyin::candCurrentPage() const {
     return ctx_ ? chewing_cand_CurrentPage(ctx_) : 0;
 }
 
 int Zhuyin::candTotalPage() const {
     return ctx_ ? chewing_cand_TotalPage(ctx_) : 0;
-}
-
-void Zhuyin::nextPage() {
-    if (ctx_) {
-        chewing_handle_PageDown(ctx_);
-    }
-}
-
-void Zhuyin::prevPage() {
-    if (ctx_) {
-        chewing_handle_PageUp(ctx_);
-    }
 }
 
 bool Zhuyin::openCandidates() {
