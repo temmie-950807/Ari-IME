@@ -156,13 +156,25 @@ int main(int argc, char **argv) {
         type(others, "=~|");
         assert(others.preeditText() == "＝～｜");
 
+        // The shortcut must not rescue them either. Every one of these symbols
+        // needs Shift to type at all, so with the shortcut set to Shift there
+        // is no keystroke left that could ask for the half-width form.
         Buffer shortcut;
         shortcut.setChinesePunctuationShortcut(
             ari_ime::ChinesePunctuationShortcut::Shift);
-        shortcut.handleKey(fcitx::Key(static_cast<fcitx::KeySym>('@'),
+        for (const char c : std::string("@#$%&*+_")) {
+            shortcut.reset();
+            shortcut.handleKey(fcitx::Key(static_cast<fcitx::KeySym>(c),
+                                          fcitx::KeyStates{fcitx::KeyState::Shift}));
+            assert(shortcut.preeditText() == std::string(1, c) &&
+                   "Shift+key is how these are typed, not a request for 全形");
+        }
+
+        // The shortcut still works on everything else.
+        shortcut.reset();
+        shortcut.handleKey(fcitx::Key(static_cast<fcitx::KeySym>('?'),
                                       fcitx::KeyStates{fcitx::KeyState::Shift}));
-        assert(shortcut.preeditText() == "＠" &&
-               "the shortcut is an explicit ask and still reaches it");
+        assert(shortcut.preeditText() == "？");
     }
 
     // The two punctuation mechanisms are independent, and the useful pairing is
