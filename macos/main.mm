@@ -58,7 +58,8 @@ static int RunSelfTest(void) {
     const std::string userData = ari_ime::userDataDir().string();
     printf("bundle          : %s\n", bundle.bundlePath.UTF8String);
     printf("CHEWING_PATH    : %s\n", dictionary ?: "(unset)");
-    printf("user data dir   : %s\n", userData.c_str());
+    printf("user data dir   : %s   (checks below use a scratch copy)\n",
+           userData.c_str());
 
     NSString *dictionaryFile =
         [@(dictionary ?: "") stringByAppendingPathComponent:@"dictionary.dat"];
@@ -75,6 +76,18 @@ static int RunSelfTest(void) {
     printf("controller class: %s (%s)\n", controllerName.UTF8String,
            haveController ? "resolvable" : "NOT FOUND");
     failures += haveController ? 0 : 1;
+
+    // Everything below opens a real libchewing context, and libchewing rewrites
+    // its user dictionary when that context closes. Point the checks at a
+    // scratch directory so running --selftest can never disturb what the user
+    // has actually learned.
+    NSString *scratch = [NSTemporaryDirectory()
+        stringByAppendingPathComponent:@"ari-ime-selftest"];
+    [NSFileManager.defaultManager createDirectoryAtPath:scratch
+                            withIntermediateDirectories:YES
+                                             attributes:nil
+                                                  error:nil];
+    setenv("ARI_IME_USER_DATA_DIR", scratch.fileSystemRepresentation, 1);
 
     Buffer buffer;
     printf("engine ready    : %s\n", buffer.engineReady() ? "yes" : "no");

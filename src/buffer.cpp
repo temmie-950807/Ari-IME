@@ -305,6 +305,25 @@ bool syllableConvertsTone1(const std::string &canonicalBody) {
            containsHanCharacter(probe->preedit());
 }
 
+// These read as code far more often than as Chinese punctuation: an email
+// address, a shell flag, a Markdown heading, a variable name. Full-width mode
+// leaves them ASCII so that typing one mid-sentence does not have to be undone.
+// The full-width forms stay reachable through the punctuation shortcut and the
+// candidate window, which are explicit asks rather than the default path.
+std::string codeSymbolPunct(char c) {
+    switch (c) {
+    case '_': return "＿";
+    case '#': return "＃";
+    case '@': return "＠";
+    case '$': return "＄";
+    case '%': return "％";
+    case '&': return "＆";
+    case '*': return "＊";
+    case '+': return "＋";
+    default: return {};
+    }
+}
+
 // chewing natively maps the shifted / standalone punctuation keys to full-width
 // Chinese punctuation (e.g. '<' -> ，, '>' -> 。, '?' -> ？, '[' -> 「,
 // '\'' -> 、). Return that mapping for key `c`, or empty for letters/digits/
@@ -315,6 +334,9 @@ std::string chinesePunct(char c) {
     if (std::isalnum(static_cast<unsigned char>(c))) {
         return {};
     }
+    if (!codeSymbolPunct(c).empty()) {
+        return {}; // half-width by default; see codeSymbolPunct
+    }
     if (c == '\\') {
         return "、";
     }
@@ -322,17 +344,9 @@ std::string chinesePunct(char c) {
         return "……";
     }
     switch (c) {
-    case '@': return "＠";
-    case '#': return "＃";
-    case '$': return "＄";
-    case '%': return "％";
-    case '&': return "＆";
-    case '*': return "＊";
-    case '+': return "＋";
     case '=': return "＝";
     case '|': return "｜";
     case '~': return "～";
-    case '_': return "＿";
     case '`': return "｀";
     case '"': return "＂";
     // libchewing maps the shifted bracket to 『』. Both halves of the key give
@@ -394,8 +408,15 @@ std::string explicitChinesePunct(char c) {
 }
 
 std::string chinesePunctShortcut(char c) {
-    const std::string named = explicitChinesePunct(c);
-    return named.empty() ? chinesePunct(c) : named;
+    if (const std::string named = explicitChinesePunct(c); !named.empty()) {
+        return named;
+    }
+    // Pressing the shortcut is an explicit request for the Chinese form, so the
+    // keys that stay half-width by default are still reachable through it.
+    if (const std::string wide = codeSymbolPunct(c); !wide.empty()) {
+        return wide;
+    }
+    return chinesePunct(c);
 }
 
 // Paired punctuation: typing the opening half also parks its closing half after

@@ -140,6 +140,31 @@ int main(int argc, char **argv) {
                "an unnamed 注音 key must not go through the probe");
     }
 
+    // Code symbols stay ASCII even with full-width punctuation on: an email
+    // address, a shell flag or a Markdown heading typed mid-sentence should not
+    // have to be undone. The full-width forms are still one shortcut away.
+    {
+        Buffer full;
+        full.setFullWidthPunct(true);
+        type(full, "@#$%&*+_");
+        assert(full.preeditText() == "@#$%&*+_" &&
+               "code symbols must stay half-width by default");
+
+        // Their neighbours on the same keys must keep converting.
+        Buffer others;
+        others.setFullWidthPunct(true);
+        type(others, "=~|");
+        assert(others.preeditText() == "＝～｜");
+
+        Buffer shortcut;
+        shortcut.setChinesePunctuationShortcut(
+            ari_ime::ChinesePunctuationShortcut::Shift);
+        shortcut.handleKey(fcitx::Key(static_cast<fcitx::KeySym>('@'),
+                                      fcitx::KeyStates{fcitx::KeyState::Shift}));
+        assert(shortcut.preeditText() == "＠" &&
+               "the shortcut is an explicit ask and still reaches it");
+    }
+
     // The two punctuation mechanisms are independent, and the useful pairing is
     // the shortcut alone: keys stay literal until Shift is held. With
     // full-width mode also on, a bare / becomes ？ and the slash is untypable.
