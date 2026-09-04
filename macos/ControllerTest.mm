@@ -598,7 +598,8 @@ int main(void) {
             // through, so leaving any of these three unset is what produced an
             // unreadable list in the first place.
             NSDictionary *style = AriCandidateAttributesForAppearance(
-                [NSAppearance appearanceNamed:name]);
+                [NSAppearance appearanceNamed:name],
+                @{(NSString *)IMKCandidatesSendServerKeyEventFirst : @YES});
             assert(style[NSForegroundColorAttributeName] != nil &&
                    "IMK would default the candidate text to black");
             assert(style[NSBackgroundColorDocumentAttribute] != nil &&
@@ -606,6 +607,13 @@ int main(void) {
             assert([style[(NSString *)IMKCandidatesOpacityAttributeName]
                        doubleValue] == 1.0 &&
                    "a translucent panel takes its colour from the document");
+            // -setAttributes: replaces the dictionary. Losing this key sends
+            // every key event to the panel instead of the controller, and
+            // nothing can be selected at all — which is exactly what shipping
+            // the style keys on their own did.
+            assert([style[(NSString *)IMKCandidatesSendServerKeyEventFirst]
+                       boolValue] &&
+                   "styling must not drop IMK's own settings");
         }
 
         std::puts("\ncontroller test passed");

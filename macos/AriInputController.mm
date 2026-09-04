@@ -542,7 +542,8 @@ static NSTextField *gHUDLabel = nil;
 // here rather than where the panel is created is what lets a Light/Dark switch
 // mid-session take effect: the panel lives as long as the process and never
 // re-styles itself.
-NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance) {
+NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance,
+                                                  NSDictionary *existing) {
     __block NSColor *text = nil;
     __block NSColor *background = nil;
     [appearance performAsCurrentDrawingAppearance:^{
@@ -554,11 +555,18 @@ NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance) {
     if (text == nil || background == nil) {
         return nil;
     }
-    return @{
-        NSForegroundColorAttributeName : text,
-        NSBackgroundColorDocumentAttribute : background,
-        (NSString *)IMKCandidatesOpacityAttributeName : @1.0,
-    };
+    // -setAttributes: replaces the dictionary rather than merging into it, and
+    // the one IMK starts with holds IMKCandidatesSendServerKeyEventFirst — the
+    // switch that sends key events to this controller before the panel sees
+    // them. Ari's core drives every key, so dropping it hands the whole
+    // keyboard to the panel and nothing can be selected at all. Style keys go
+    // on top of whatever is already there, never in place of it.
+    NSMutableDictionary *merged =
+        [existing mutableCopy] ?: [NSMutableDictionary dictionary];
+    merged[NSForegroundColorAttributeName] = text;
+    merged[NSBackgroundColorDocumentAttribute] = background;
+    merged[(NSString *)IMKCandidatesOpacityAttributeName] = @1.0;
+    return merged;
 }
 
 static void ApplyCandidateAppearance(IMKCandidates *panel) {
@@ -567,8 +575,8 @@ static void ApplyCandidateAppearance(IMKCandidates *panel) {
     if (current == nil || [current isEqualToString:applied]) {
         return;
     }
-    NSDictionary *attributes =
-        AriCandidateAttributesForAppearance(NSApp.effectiveAppearance);
+    NSDictionary *attributes = AriCandidateAttributesForAppearance(
+        NSApp.effectiveAppearance, panel.attributes);
     if (attributes == nil) {
         return;
     }
