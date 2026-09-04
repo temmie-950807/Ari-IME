@@ -542,46 +542,69 @@ static NSTextField *gHUDLabel = nil;
 // here rather than where the panel is created is what lets a Light/Dark switch
 // mid-session take effect: the panel lives as long as the process and never
 // re-styles itself.
-NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance,
-                                                  NSDictionary *existing) {
-    __block NSColor *text = nil;
+// IMK ignores the colours its own header documents. Setting
+// NSForegroundColorAttributeName to pure green and NSBackgroundColorDocumentAttribute
+// to pure red through -setAttributes: changes nothing on screen; the values are
+// stored and never drawn.
+//
+// What the panel actually is, is a translucent glass window (IMKUIPanel holding
+// an IMKUIGlassView) whose brightness comes from the document behind it, while
+// its text colour comes from the system appearance. Two unrelated inputs, so a
+// pale page under Dark Mode gives white text on a background the page has
+// washed out to white — which is the bug, and why no attribute could fix it.
+//
+// The window belongs to this process, so an opaque layer slipped underneath the
+// candidate rows settles it. The rows keep drawing exactly as they did; they
+// just land on a colour taken from the same appearance that chose the text,
+// instead of on the document.
+NSColor *AriCandidateBackdropColor(NSAppearance *appearance) {
     __block NSColor *background = nil;
     [appearance performAsCurrentDrawingAppearance:^{
-        text = [AriHUDBackground.textColor
-            colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+        // The same fill the mode badge uses, so the two surfaces agree.
         background = [AriHUDBackground.fillColor
             colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
     }];
-    if (text == nil || background == nil) {
-        return nil;
-    }
-    // -setAttributes: replaces the dictionary rather than merging into it, and
-    // the one IMK starts with holds IMKCandidatesSendServerKeyEventFirst — the
-    // switch that sends key events to this controller before the panel sees
-    // them. Ari's core drives every key, so dropping it hands the whole
-    // keyboard to the panel and nothing can be selected at all. Style keys go
-    // on top of whatever is already there, never in place of it.
-    NSMutableDictionary *merged =
-        [existing mutableCopy] ?: [NSMutableDictionary dictionary];
-    merged[NSForegroundColorAttributeName] = text;
-    merged[NSBackgroundColorDocumentAttribute] = background;
-    merged[(NSString *)IMKCandidatesOpacityAttributeName] = @1.0;
-    return merged;
+    return background;
 }
 
-static void ApplyCandidateAppearance(IMKCandidates *panel) {
-    static NSAppearanceName applied = nil;
-    NSAppearanceName current = NSApp.effectiveAppearance.name;
-    if (current == nil || [current isEqualToString:applied]) {
-        return;
+static void PaintCandidateBackdrop(void) {
+    static NSString *const identifier = @"AriCandidateBackdrop";
+    for (NSWindow *window in NSApp.windows) {
+        // Matching on the class name is the only handle IMK offers. Finding
+        // nothing simply leaves the panel as it was, which is what every
+        // release before this one shipped.
+        if (!window.isVisible ||
+            ![NSStringFromClass(window.class) hasPrefix:@"IMKUI"]) {
+            continue;
+        }
+        NSView *content = window.contentView;
+        if (content == nil) {
+            continue;
+        }
+
+        NSView *backdrop = nil;
+        for (NSView *view in content.subviews) {
+            if ([view.identifier isEqualToString:identifier]) {
+                backdrop = view;
+                break;
+            }
+        }
+        if (backdrop == nil) {
+            backdrop = [[NSView alloc] initWithFrame:content.bounds];
+            backdrop.identifier = identifier;
+            backdrop.autoresizingMask =
+                NSViewWidthSizable | NSViewHeightSizable;
+            backdrop.wantsLayer = YES;
+            // Below every row, above the glass the panel draws for itself.
+            [content addSubview:backdrop positioned:NSWindowBelow relativeTo:nil];
+        }
+        backdrop.frame = content.bounds;
+        NSColor *background =
+            AriCandidateBackdropColor(window.effectiveAppearance);
+        if (background != nil) {
+            backdrop.layer.backgroundColor = background.CGColor;
+        }
     }
-    NSDictionary *attributes = AriCandidateAttributesForAppearance(
-        NSApp.effectiveAppearance, panel.attributes);
-    if (attributes == nil) {
-        return;
-    }
-    applied = current;
-    [panel setAttributes:attributes];
 }
 
 - (void)refreshCandidateWindow {
@@ -591,7 +614,7 @@ static void ApplyCandidateAppearance(IMKCandidates *panel) {
     if (panel == nil) {
         return;
     }
-    ApplyCandidateAppearance(panel);
+
     if (count == 0) {
         [panel hide];
         return;
@@ -604,6 +627,8 @@ static void ApplyCandidateAppearance(IMKCandidates *panel) {
     if (!panel.isVisible) {
         [panel showCandidates];
     }
+    // Only now does the panel window exist to be found.
+    PaintCandidateBackdrop();
     [self syncHighlight:panel];
 }
 

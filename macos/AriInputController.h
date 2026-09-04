@@ -46,11 +46,12 @@ double AriHUDContrastForTesting(NSAppearance *appearance);
 // so both colours and the opacity have to be stated; this is exposed so a test
 // can check that they were, rather than waiting for someone to notice black
 // text on a black panel.
-// `existing` is the panel's current dictionary, which the result is layered on
-// top of: -setAttributes: replaces rather than merges, and what it would drop
-// includes the flag that routes key events to the controller first.
-NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance,
-                                                  NSDictionary *existing);
+// The colour painted behind the candidate list under `appearance`. IMK draws
+// the panel as translucent glass, so without this its background is the colour
+// of the document behind it while its text follows the system appearance — the
+// two disagree and the list becomes unreadable. Exposed so a test can check it
+// stays paired with the badge, which is what the text colour is chosen against.
+NSColor *AriCandidateBackdropColor(NSAppearance *appearance);
 
 // Version and build stamp of the server that is actually running, sampled when
 // the executable was loaded rather than when it is asked for.

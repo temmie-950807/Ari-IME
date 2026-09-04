@@ -597,23 +597,21 @@ int main(void) {
             // text to black and lets the document behind the panel show
             // through, so leaving any of these three unset is what produced an
             // unreadable list in the first place.
-            NSDictionary *style = AriCandidateAttributesForAppearance(
-                [NSAppearance appearanceNamed:name],
-                @{(NSString *)IMKCandidatesSendServerKeyEventFirst : @YES});
-            assert(style[NSForegroundColorAttributeName] != nil &&
-                   "IMK would default the candidate text to black");
-            assert(style[NSBackgroundColorDocumentAttribute] != nil &&
-                   "without a background the panel picks its own");
-            assert([style[(NSString *)IMKCandidatesOpacityAttributeName]
-                       doubleValue] == 1.0 &&
-                   "a translucent panel takes its colour from the document");
-            // -setAttributes: replaces the dictionary. Losing this key sends
-            // every key event to the panel instead of the controller, and
-            // nothing can be selected at all — which is exactly what shipping
-            // the style keys on their own did.
-            assert([style[(NSString *)IMKCandidatesSendServerKeyEventFirst]
-                       boolValue] &&
-                   "styling must not drop IMK's own settings");
+            // The candidate list is drawn by IMK as translucent glass, so
+            // its background would otherwise be the colour of whatever the
+            // user is typing into while its text follows the appearance. The
+            // backdrop painted under it has to be the very colour the badge
+            // uses, because that is the one the text was chosen against.
+            NSAppearance *appearance = [NSAppearance appearanceNamed:name];
+            NSColor *backdrop = AriCandidateBackdropColor(appearance);
+            __block NSColor *badge = nil;
+            [appearance performAsCurrentDrawingAppearance:^{
+                badge = [NSColor.windowBackgroundColor
+                    colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+            }];
+            assert(backdrop != nil && "an unpainted panel shows the document");
+            assert([backdrop isEqual:badge] &&
+                   "the list must sit on the colour its text was picked for");
         }
 
         std::puts("\ncontroller test passed");
