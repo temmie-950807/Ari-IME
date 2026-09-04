@@ -32,4 +32,13 @@ IMKCandidates *AriSharedCandidates(void);
 // on the installed input method's preferences and overwrite the user's choices.
 void AriSetDefaultsForTesting(NSUserDefaults *defaults);
 
+// Smallest contrast ratio between the mode badge's background and its text,
+// measured under `appearance`. Exposed because the badge is the one surface
+// Ari paints itself: it used to take its background from a vibrancy material,
+// which samples the document behind the window, so the badge tracked the page
+// while the label tracked the system appearance and a white page under Dark
+// Mode produced white-on-white. A single number is enough to keep that from
+// coming back.
+double AriHUDContrastForTesting(NSAppearance *appearance);
+
 #endif // ARI_MACOS_INPUT_CONTROLLER_H

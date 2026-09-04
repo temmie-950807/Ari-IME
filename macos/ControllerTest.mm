@@ -580,6 +580,20 @@ int main(void) {
 
         setenv("ARI_IME_DISABLE_AUTOLEARN", "1", 1);
 
+        // The mode badge has to stay readable in both appearances. It used to
+        // fill itself from a vibrancy material, which samples the document
+        // behind the window, so its background followed the page while the
+        // label followed the system appearance: a white page under Dark Mode
+        // put white text on a near-white badge. Both colours now come from the
+        // one effectiveAppearance, which is what makes this measurable at all.
+        for (NSAppearanceName name in @[ NSAppearanceNameAqua,
+                                         NSAppearanceNameDarkAqua ]) {
+            const double contrast = AriHUDContrastForTesting(
+                [NSAppearance appearanceNamed:name]);
+            std::printf("  ok  %-34s %.1f:1\n", name.UTF8String, contrast);
+            assert(contrast >= 4.5 && "the mode badge must stay readable");
+        }
+
         std::puts("\ncontroller test passed");
     }
     return 0;

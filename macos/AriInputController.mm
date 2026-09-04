@@ -60,6 +60,64 @@ NSUInteger utf16Offset(const std::string &text, int graphemeIndex) {
 // Fcitx5 pops a short-lived hint through showInputMethodInformation; macOS has
 // no equivalent, so the mode toggle and the core's notification strings would
 // otherwise have nowhere to go.
+// The badge draws its own background rather than using NSVisualEffectView.
+// Vibrancy samples whatever is behind the window, so the badge tracked the
+// document's colour while the label tracked the system appearance, and the two
+// drift apart: a white page under Dark Mode produced white text on a near-white
+// badge. Filling a colour here puts both sides on the same effectiveAppearance,
+// which is the only way they cannot disagree.
+@interface AriHUDBackground : NSView
+// The badge's two colours, in one place so the drawing and the contrast check
+// can never be measuring different things.
++ (NSColor *)fillColor;
++ (NSColor *)textColor;
+@end
+
+@implementation AriHUDBackground
+
++ (NSColor *)fillColor { return NSColor.windowBackgroundColor; }
++ (NSColor *)textColor { return NSColor.labelColor; }
+
+- (void)drawRect:(NSRect)dirty {
+    (void)dirty;
+    NSBezierPath *rounded =
+        [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(self.bounds, 0.5, 0.5)
+                                        xRadius:8
+                                        yRadius:8];
+    [AriHUDBackground.fillColor setFill];
+    [rounded fill];
+    // Without an edge the badge dissolves into a window of the same colour.
+    [NSColor.separatorColor setStroke];
+    [rounded stroke];
+}
+@end
+
+// WCAG relative luminance, which is what the 4.5:1 readability threshold is
+// defined against. Channels have to be linearised first; averaging the raw
+// sRGB components would flatter dark backgrounds.
+static double AriRelativeLuminance(NSColor *color) {
+    NSColor *rgb = [color colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+    const double channel[3] = {rgb.redComponent, rgb.greenComponent,
+                               rgb.blueComponent};
+    double linear[3];
+    for (int i = 0; i < 3; ++i) {
+        linear[i] = channel[i] <= 0.03928
+                        ? channel[i] / 12.92
+                        : pow((channel[i] + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+double AriHUDContrastForTesting(NSAppearance *appearance) {
+    __block double contrast = 0;
+    [appearance performAsCurrentDrawingAppearance:^{
+        const double fill = AriRelativeLuminance(AriHUDBackground.fillColor);
+        const double text = AriRelativeLuminance(AriHUDBackground.textColor);
+        contrast = (MAX(fill, text) + 0.05) / (MIN(fill, text) + 0.05);
+    }];
+    return contrast;
+}
+
 @interface AriHUD : NSObject
 + (void)show:(NSString *)message near:(id<IMKTextInput, NSObject>)client;
 @end
@@ -76,7 +134,7 @@ static NSTextField *gHUDLabel = nil;
     gHUDLabel.selectable = NO;
     gHUDLabel.drawsBackground = NO;
     gHUDLabel.font = [NSFont systemFontOfSize:16];
-    gHUDLabel.textColor = NSColor.labelColor;
+    gHUDLabel.textColor = AriHUDBackground.textColor;
 
     gHUDPanel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 10, 10)
                                            styleMask:NSWindowStyleMaskBorderless
@@ -99,14 +157,8 @@ static NSTextField *gHUDLabel = nil;
     gHUDPanel.becomesKeyOnlyIfNeeded = YES;
     gHUDPanel.hidesOnDeactivate = NO;
 
-    NSVisualEffectView *background =
-        [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-    background.material = NSVisualEffectMaterialHUDWindow;
-    background.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-    background.state = NSVisualEffectStateActive;
-    background.wantsLayer = YES;
-    background.layer.cornerRadius = 8;
-    background.layer.masksToBounds = YES;
+    AriHUDBackground *background =
+        [[AriHUDBackground alloc] initWithFrame:NSZeroRect];
     [background addSubview:gHUDLabel];
     gHUDPanel.contentView = background;
 }
@@ -152,6 +204,9 @@ static NSTextField *gHUDLabel = nil;
 
     [gHUDPanel setFrame:NSMakeRect(origin.x, origin.y, panel.width, panel.height)
                 display:YES];
+    // The window is transparent, so its shadow is derived from what the content
+    // view draws. Without this it keeps the previous message's outline.
+    [gHUDPanel invalidateShadow];
     gHUDPanel.alphaValue = 1.0;
     [gHUDPanel orderFrontRegardless];
 
