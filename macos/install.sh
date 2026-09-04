@@ -24,14 +24,20 @@ fi
 mkdir -p "${target_dir}"
 
 if [ -e "${target_app}" ]; then
-    echo "==> replacing the existing ${APP_NAME}"
+    echo "==> updating the existing ${APP_NAME} in place"
     # The running server holds the old bundle open; stopping it first keeps the
     # replacement from being half-applied.
     killall AriIME 2>/dev/null || true
-    rm -rf "${target_app}"
+    # Deliberately not `rm -rf` followed by a fresh copy. Removing the bundle
+    # takes the input source out of the system's registry, and macOS only
+    # rescans ~/Library/Input Methods at login — so the entry disappears from
+    # the input-source menu and cannot be selected until the next login, which
+    # looks exactly like the update having broken the input method. rsync
+    # replaces the contents without the bundle directory ever ceasing to exist.
+    rsync -a --delete "${source_app}/" "${target_app}/"
+else
+    cp -R "${source_app}" "${target_app}"
 fi
-
-cp -R "${source_app}" "${target_app}"
 echo "==> installed to ${target_app}"
 
 cat <<EOF
@@ -45,6 +51,10 @@ whatever is on disk, so a stale server cannot look like a fresh one.
 
 Updates need no logout: the old server was killed above and macOS starts the
 new one on the next keystroke. Switch away from Ari IME and back to be sure.
+
+If it ever does vanish from the menu, this puts it back without a logout:
+
+  ${target_app}/Contents/MacOS/AriIME --register
 
 First install only: log out and back in, then add it under
   System Settings > Keyboard > Text Input > Input Sources > Edit > + > Ari IME
