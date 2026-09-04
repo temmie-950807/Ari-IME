@@ -34,14 +34,20 @@ fi
 cp -R "${source_app}" "${target_app}"
 echo "==> installed to ${target_app}"
 
-cat <<'EOF'
+cat <<EOF
 
-Next: log out and log back in.
+Check it took: the input-source menu ends with the running build, and
 
-macOS only rescans ~/Library/Input Methods at login, so the entry will not
-appear in System Settings until then. After logging back in:
+  ${target_app}/Contents/MacOS/AriIME --selftest
 
+prints the same line. Both report the copy this process actually loaded, not
+whatever is on disk, so a stale server cannot look like a fresh one.
+
+Updates need no logout: the old server was killed above and macOS starts the
+new one on the next keystroke. Switch away from Ari IME and back to be sure.
+
+First install only: log out and back in, then add it under
   System Settings > Keyboard > Text Input > Input Sources > Edit > + > Ari IME
-
-This applies to updates too, not just the first install.
+macOS only rescans ~/Library/Input Methods at login, so a brand-new bundle
+does not appear in that list until then.
 EOF

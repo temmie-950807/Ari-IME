@@ -41,4 +41,8 @@ void AriSetDefaultsForTesting(NSUserDefaults *defaults);
 // coming back.
 double AriHUDContrastForTesting(NSAppearance *appearance);
 
+// Version and build stamp of the server that is actually running, sampled when
+// the executable was loaded rather than when it is asked for.
+NSString *AriRunningBuildDescription(void);
+
 #endif // ARI_MACOS_INPUT_CONTROLLER_H

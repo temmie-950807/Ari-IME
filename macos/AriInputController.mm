@@ -32,6 +32,36 @@ static NSUserDefaults *AriDefaults(void) {
     return gDefaultsOverride ?: NSUserDefaults.standardUserDefaults;
 }
 
+// Read at image load, not when the menu opens: install.sh replaces the bundle
+// under a running server, so by the time anyone looks at the menu the file on
+// disk may be a build this process is not running. Sampling it here pins it to
+// the copy that was actually loaded.
+static NSString *gBuildStamp = nil;
+
+__attribute__((constructor)) static void AriCaptureBuildStamp(void) {
+    NSString *path = NSBundle.mainBundle.executablePath;
+    NSDate *built = path == nil
+                        ? nil
+                        : [NSFileManager.defaultManager
+                              attributesOfItemAtPath:path
+                                               error:NULL][NSFileModificationDate];
+    if (built == nil) {
+        return;
+    }
+    NSDateFormatter *format = [[NSDateFormatter alloc] init];
+    format.dateFormat = @"yyyy-MM-dd HH:mm";
+    gBuildStamp = [format stringFromDate:built];
+}
+
+// Version and build stamp of the running server, for the menu and --selftest.
+NSString *AriRunningBuildDescription(void) {
+    NSString *version = [NSBundle.mainBundle
+        objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    return [NSString stringWithFormat:@"Ari-IME %@（%@）",
+                                      version.length > 0 ? version : @"?",
+                                      gBuildStamp ?: @"未知"];
+}
+
 namespace {
 
 NSString *toNSString(const std::string &text) {
@@ -823,6 +853,16 @@ NSMenuItem *menuItemFrom(id sender) {
     [menu addItem:templates];
     [menu addItem:toggle(@"英文自動送出", @selector(ariToggleEnglishAutoCommit:),
                          kEnglishAutoCommitKey)];
+
+    // Updating replaces the bundle and restarts the server, neither of which is
+    // visible. Without this there is nowhere at all to check whether an update
+    // took, so a successful one and a failed one look identical.
+    [menu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *build =
+        [[NSMenuItem alloc] initWithTitle:AriRunningBuildDescription()
+                                   action:NULL
+                            keyEquivalent:@""];
+    [menu addItem:build];
 
     return menu;
 }

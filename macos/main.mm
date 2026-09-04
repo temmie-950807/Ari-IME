@@ -56,6 +56,7 @@ static int RunSelfTest(void) {
 
     const char *dictionary = getenv("CHEWING_PATH");
     const std::string userData = ari_ime::userDataDir().string();
+    printf("running build   : %s\n", AriRunningBuildDescription().UTF8String);
     printf("bundle          : %s\n", bundle.bundlePath.UTF8String);
     printf("CHEWING_PATH    : %s\n", dictionary ?: "(unset)");
     printf("user data dir   : %s   (checks below use a scratch copy)\n",
