@@ -40,6 +40,7 @@ else
 fi
 echo "==> installed to ${target_app}"
 
+
 cat <<EOF
 
 Check it took: the input-source menu ends with the running build, and
@@ -52,12 +53,15 @@ whatever is on disk, so a stale server cannot look like a fresh one.
 Updates need no logout: the old server was killed above and macOS starts the
 new one on the next keystroke. Switch away from Ari IME and back to be sure.
 
-If it ever does vanish from the menu, this puts it back without a logout:
+If Ari-IME is missing from the input menu, adding it back is a manual step —
+no command-line call can do it. TISRegisterInputSource and TISEnableInputSource
+both return success without the system's enabled list ever changing, so the
+only thing that works is:
 
-  ${target_app}/Contents/MacOS/AriIME --register
+  System Settings > Keyboard > Text Input > Input Sources > Edit > +
+    > Traditional Chinese > Ari-IME
 
-First install only: log out and back in, then add it under
-  System Settings > Keyboard > Text Input > Input Sources > Edit > + > Ari IME
-macOS only rescans ~/Library/Input Methods at login, so a brand-new bundle
-does not appear in that list until then.
+If it is not offered in that list, log out and back in first, then repeat:
+macOS only rescans ~/Library/Input Methods at login, which is also why a
+first install always needs one.
 EOF

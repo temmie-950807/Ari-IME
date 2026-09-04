@@ -41,6 +41,13 @@ void AriSetDefaultsForTesting(NSUserDefaults *defaults);
 // coming back.
 double AriHUDContrastForTesting(NSAppearance *appearance);
 
+// The style dictionary handed to IMKCandidates under `appearance`. IMK defaults
+// candidate text to black and lets the document behind the panel show through,
+// so both colours and the opacity have to be stated; this is exposed so a test
+// can check that they were, rather than waiting for someone to notice black
+// text on a black panel.
+NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance);
+
 // Version and build stamp of the server that is actually running, sampled when
 // the executable was loaded rather than when it is asked for.
 NSString *AriRunningBuildDescription(void);

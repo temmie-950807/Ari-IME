@@ -530,6 +530,52 @@ static NSTextField *gHUDLabel = nil;
     return strings;
 }
 
+// IMKCandidates.h documents the candidate text colour as "By default it is
+// black", but the panel draws its own background from the system appearance and
+// lets the document behind it show through. Those are three different inputs to
+// what should be one decision, so they disagree: in Dark Mode the list came out
+// black on near-black, and over a pale document the background washed out to
+// white while the text stayed put.
+//
+// Naming both colours settles it. Opacity 1.0 stops the backdrop bleeding
+// through, which is the same mistake the mode badge used to make. Applying it
+// here rather than where the panel is created is what lets a Light/Dark switch
+// mid-session take effect: the panel lives as long as the process and never
+// re-styles itself.
+NSDictionary *AriCandidateAttributesForAppearance(NSAppearance *appearance) {
+    __block NSColor *text = nil;
+    __block NSColor *background = nil;
+    [appearance performAsCurrentDrawingAppearance:^{
+        text = [AriHUDBackground.textColor
+            colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+        background = [AriHUDBackground.fillColor
+            colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+    }];
+    if (text == nil || background == nil) {
+        return nil;
+    }
+    return @{
+        NSForegroundColorAttributeName : text,
+        NSBackgroundColorDocumentAttribute : background,
+        (NSString *)IMKCandidatesOpacityAttributeName : @1.0,
+    };
+}
+
+static void ApplyCandidateAppearance(IMKCandidates *panel) {
+    static NSAppearanceName applied = nil;
+    NSAppearanceName current = NSApp.effectiveAppearance.name;
+    if (current == nil || [current isEqualToString:applied]) {
+        return;
+    }
+    NSDictionary *attributes =
+        AriCandidateAttributesForAppearance(NSApp.effectiveAppearance);
+    if (attributes == nil) {
+        return;
+    }
+    applied = current;
+    [panel setAttributes:attributes];
+}
+
 - (void)refreshCandidateWindow {
     IMKCandidates *panel = AriSharedCandidates();
     const std::size_t count = _buffer.candidates().size();
@@ -537,6 +583,7 @@ static NSTextField *gHUDLabel = nil;
     if (panel == nil) {
         return;
     }
+    ApplyCandidateAppearance(panel);
     if (count == 0) {
         [panel hide];
         return;

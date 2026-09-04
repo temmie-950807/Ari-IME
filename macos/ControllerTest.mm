@@ -592,6 +592,20 @@ int main(void) {
                 [NSAppearance appearanceNamed:name]);
             std::printf("  ok  %-34s %.1f:1\n", name.UTF8String, contrast);
             assert(contrast >= 4.5 && "the mode badge must stay readable");
+
+            // The candidate list has to be told the same pair. IMK defaults its
+            // text to black and lets the document behind the panel show
+            // through, so leaving any of these three unset is what produced an
+            // unreadable list in the first place.
+            NSDictionary *style = AriCandidateAttributesForAppearance(
+                [NSAppearance appearanceNamed:name]);
+            assert(style[NSForegroundColorAttributeName] != nil &&
+                   "IMK would default the candidate text to black");
+            assert(style[NSBackgroundColorDocumentAttribute] != nil &&
+                   "without a background the panel picks its own");
+            assert([style[(NSString *)IMKCandidatesOpacityAttributeName]
+                       doubleValue] == 1.0 &&
+                   "a translucent panel takes its colour from the document");
         }
 
         std::puts("\ncontroller test passed");
