@@ -198,7 +198,26 @@ void expectRangeLocation(NSUInteger actual, NSUInteger expected,
 
 #pragma mark - Tests
 
-int main(void) {
+int main(int argc, char **argv) {
+    // Everything below runs against a real engine and calls
+    // resetUserDictionary(), which deletes the dictionary, the preferences and
+    // the templates in whatever directory is configured. CTest supplies a
+    // throwaway one through the test's ENVIRONMENT property; running the binary
+    // by hand does not, and the fallback is the installed input method's own
+    // directory — so an unset variable is not a default worth having, it is the
+    // user's data being erased. Refuse instead.
+    if (argc > 1) {
+        setenv("ARI_IME_USER_DATA_DIR", argv[1], 1);
+    }
+    if (getenv("ARI_IME_USER_DATA_DIR") == nullptr) {
+        std::fprintf(stderr,
+                     "refusing to run: ARI_IME_USER_DATA_DIR is unset, and this "
+                     "test resets whatever directory it finds.\n"
+                     "usage: %s <throwaway-user-data-dir>\n",
+                     argv[0]);
+        return 2;
+    }
+
     @autoreleasepool {
         // Line-buffered so a crash still shows how far the run got.
         std::setvbuf(stdout, nullptr, _IOLBF, 0);
