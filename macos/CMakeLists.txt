@@ -75,11 +75,29 @@ find_library(CARBON Carbon REQUIRED) # TISRegisterInputSource / kVK_* key codes
 configure_file("${CMAKE_CURRENT_LIST_DIR}/Info.plist.in"
                "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)
 
+# Bundle resources are carried by the target rather than copied by a POST_BUILD
+# command, so that editing one actually reaches the bundle. A POST_BUILD copy
+# runs only when AriIME relinks, and changing artwork does not relink anything:
+# the build then reports success while the app keeps the previous icon. Listing
+# the files with HEADER_FILE_ONLY does not fix it either — that marks them for
+# IDEs without creating a dependency edge. MACOSX_PACKAGE_LOCATION makes CMake
+# copy them as part of building the bundle, with the dependency tracked.
+set(ARI_BUNDLE_RESOURCES "${CMAKE_CURRENT_LIST_DIR}/ari.pdf")
+set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/ari.pdf" PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources")
+foreach(lproj en ja zh-Hans zh-Hant)
+    set(strings "${CMAKE_CURRENT_LIST_DIR}/Resources/${lproj}.lproj/InfoPlist.strings")
+    set_source_files_properties("${strings}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources/${lproj}.lproj")
+    list(APPEND ARI_BUNDLE_RESOURCES "${strings}")
+endforeach()
+
 add_executable(AriIME MACOSX_BUNDLE
     main.mm
     AriInputController.mm
     AriDictionaryWindow.mm
     KeyMap.mm
+    ${ARI_BUNDLE_RESOURCES}
 )
 set_target_properties(AriIME PROPERTIES
     OUTPUT_NAME "${ARI_EXECUTABLE_NAME}"
@@ -95,21 +113,10 @@ add_custom_command(TARGET AriIME POST_BUILD
             "$<TARGET_BUNDLE_CONTENT_DIR:AriIME>/Resources/chewing-data"
     COMMENT "Bundling libchewing dictionary"
 )
-# Localised names for the input-source menu. Without a .lproj the menu shows
-# the mode's identifier and the literal string "CFBundleName" instead.
-add_custom_command(TARGET AriIME POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-            "${CMAKE_CURRENT_LIST_DIR}/Resources"
-            "$<TARGET_BUNDLE_CONTENT_DIR:AriIME>/Resources"
-    COMMENT "Bundling localised names"
-)
-# Menu-bar icon. Regenerate with: swift macos/make-icon.swift macos/ari.pdf
-add_custom_command(TARGET AriIME POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy
-            "${CMAKE_CURRENT_LIST_DIR}/ari.pdf"
-            "$<TARGET_BUNDLE_CONTENT_DIR:AriIME>/Resources/ari.pdf"
-    COMMENT "Bundling menu icon"
-)
+# The menu icon and the localised names the input-source menu needs are carried
+# by ARI_BUNDLE_RESOURCES above. Without a .lproj the menu shows the mode's
+# identifier and the literal string "CFBundleName"; without the icon, an empty
+# tile. Regenerate the icon with: swift macos/make-icon.swift macos/ari.pdf
 
 # --- Personal dictionary tool -------------------------------------------------
 #
@@ -138,10 +145,24 @@ add_dependencies(AriIME ari-ime-dict)
 
 # Apple Silicon refuses to execute an unsigned binary at all, so this is not an
 # optional release step. Ad-hoc is enough for local use.
-add_custom_command(TARGET AriIME POST_BUILD
+#
+# Signing is a stamped command rather than a POST_BUILD one because it has to
+# re-run when a bundle RESOURCE changes, not only when the executable relinks.
+# Copying a file into a signed bundle breaks the seal, so with POST_BUILD a
+# changed icon left the app reporting "a sealed resource is missing or invalid"
+# — and further rebuilds did not repair it, because nothing had relinked.
+# install.sh refuses an unsigned bundle, which is how that surfaces.
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/codesign.stamp"
     COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:AriIME>"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/codesign.stamp"
+    DEPENDS "$<TARGET_FILE:AriIME>" ${ARI_BUNDLE_RESOURCES}
     COMMENT "Ad-hoc signing the bundle"
+    VERBATIM
 )
+add_custom_target(AriIMESign ALL
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/codesign.stamp")
+add_dependencies(AriIMESign AriIME)
 
 # --- Tests -------------------------------------------------------------------
 
