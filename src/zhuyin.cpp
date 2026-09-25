@@ -339,6 +339,34 @@ std::vector<std::string> Zhuyin::readingsForText(const std::string &text) {
     return readings;
 }
 
+std::string Zhuyin::guessReadingForPhrase(const std::string &phrase) {
+    if (!ctx_ || phrase.empty()) {
+        return {};
+    }
+    const auto readings = readingsForText(phrase);
+    if (readings.empty()) {
+        return {};
+    }
+    // Spell every syllable before returning any of it. A phrase whose reading
+    // is right for three characters out of four is not a partial success: it
+    // would be stored as a mapping nobody can ever type.
+    std::string bopomofo;
+    for (const std::string &keys : readings) {
+        if (keys.empty()) {
+            return {};
+        }
+        const std::string syllable = bopomofoForKeys(keys);
+        if (syllable.empty()) {
+            return {};
+        }
+        if (!bopomofo.empty()) {
+            bopomofo += ' ';
+        }
+        bopomofo += syllable;
+    }
+    return bopomofo;
+}
+
 void Zhuyin::feedKey(char c) {
     if (ctx_) {
         chewing_handle_Default(ctx_, static_cast<int>(c));

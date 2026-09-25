@@ -132,6 +132,16 @@ public:
     // callers must treat the result as an all-or-nothing operation.
     std::vector<std::string> readingsForText(const std::string &text);
 
+    // Canonical Bopomofo for a whole Han phrase, derived by reverse lookup so
+    // a phrase can be taught without anyone spelling the reading out
+    // ("你好" -> "ㄋㄧˇ ㄏㄠˇ"). All-or-nothing: empty when any character has
+    // no reading, because a partial reading would teach the wrong mapping.
+    // Only the first reading libchewing offers for a character is considered,
+    // so a 多音字 may come back with the wrong tone and callers should show
+    // the result for review rather than committing it silently.
+    // Clears the shared context, exactly as rememberPreferredPhrase() does.
+    std::string guessReadingForPhrase(const std::string &phrase);
+
     // Reporting only (ari-ime-dict info). Do NOT reintroduce page-stepping
     // helpers here: candidates are addressed by absolute index throughout, and
     // mixing the two is what broke picking past the first page.

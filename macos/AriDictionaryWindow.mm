@@ -10,7 +10,7 @@
 #import "AriInputController.h"
 
 @interface AriDictionaryWindow () <NSTableViewDataSource, NSTableViewDelegate,
-                                   NSWindowDelegate>
+                                   NSTextFieldDelegate, NSWindowDelegate>
 @end
 
 @implementation AriDictionaryWindow {
@@ -95,11 +95,16 @@ static AriDictionaryWindow *gShared = nil;
     _phraseField = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 56, 150, 24)];
     _phraseField.placeholderString = @"詞";
     _phraseField.autoresizingMask = NSViewMaxXMargin | NSViewMaxYMargin;
+    // Filling the reading in as soon as the phrase is finished lets a wrong
+    // guess be corrected before it is stored. Deriving it costs a sweep over
+    // every syllable the layout can spell on the first call, so it happens
+    // once the field is done rather than on every keystroke.
+    _phraseField.delegate = self;
     [content addSubview:_phraseField];
 
     _readingField =
         [[NSTextField alloc] initWithFrame:NSMakeRect(174, 56, 220, 24)];
-    _readingField.placeholderString = @"注音，例如 ㄋㄧˇ ㄏㄠˇ";
+    _readingField.placeholderString = @"注音（留空自動推測）";
     _readingField.autoresizingMask = NSViewWidthSizable | NSViewMaxYMargin;
     [content addSubview:_readingField];
 
@@ -181,15 +186,33 @@ static AriDictionaryWindow *gShared = nil;
     [self applyFilter];
 }
 
+// The engine derives the reading from the characters themselves, so the field
+// is a correction, not an entry requirement.
+- (NSString *)guessReadingFor:(NSString *)phrase {
+    return [_controller ariGuessReadingForPhrase:phrase] ?: @"";
+}
+
 - (void)addEntry:(id)sender {
     (void)sender;
     NSString *phrase = [_phraseField.stringValue
         stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     NSString *reading = [_readingField.stringValue
         stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
-    if (phrase.length == 0 || reading.length == 0) {
-        _status.stringValue = @"請填寫詞與注音";
+    if (phrase.length == 0) {
+        _status.stringValue = @"請填寫詞";
         return;
+    }
+    // An empty field is the normal case now: derive rather than refuse. The
+    // guess is all-or-nothing, so a failure names the phrase instead of
+    // storing a mapping that is right for only some of its characters.
+    const BOOL guessed = reading.length == 0;
+    if (guessed) {
+        reading = [self guessReadingFor:phrase];
+        if (reading.length == 0) {
+            _status.stringValue =
+                [NSString stringWithFormat:@"推不出「%@」的注音，請自己填", phrase];
+            return;
+        }
     }
     if (![_controller ariAddPhrase:phrase reading:reading]) {
         _status.stringValue = [NSString stringWithFormat:@"無法加入「%@」", phrase];
@@ -198,7 +221,33 @@ static AriDictionaryWindow *gShared = nil;
     _phraseField.stringValue = @"";
     _readingField.stringValue = @"";
     [self reload];
-    _status.stringValue = [NSString stringWithFormat:@"已加入「%@」", phrase];
+    _status.stringValue =
+        guessed ? [NSString stringWithFormat:@"已加入「%@」%@（自動推測）", phrase,
+                                             reading]
+                : [NSString stringWithFormat:@"已加入「%@」", phrase];
+}
+
+#pragma mark NSTextFieldDelegate
+
+- (void)controlTextDidEndEditing:(NSNotification *)notification {
+    if (notification.object != _phraseField) {
+        return;
+    }
+    NSString *phrase = [_phraseField.stringValue
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    // Never overwrite a reading that was typed: the field exists precisely so
+    // a 多音字 the guess gets wrong can be corrected.
+    if (phrase.length == 0 || _readingField.stringValue.length > 0) {
+        return;
+    }
+    NSString *guess = [self guessReadingFor:phrase];
+    if (guess.length == 0) {
+        _status.stringValue =
+            [NSString stringWithFormat:@"推不出「%@」的注音，請自己填", phrase];
+        return;
+    }
+    _readingField.stringValue = guess;
+    _status.stringValue = @"注音為自動推測，多音字請先確認";
 }
 
 - (void)removeSelected:(id)sender {

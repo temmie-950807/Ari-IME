@@ -692,6 +692,13 @@ static void PaintCandidateBackdrop(void) {
     return _buffer.addUserPhrase(phrase.UTF8String, reading.UTF8String);
 }
 
+- (NSString *)ariGuessReadingForPhrase:(NSString *)phrase {
+    if (phrase.length == 0) {
+        return @"";
+    }
+    return toNSString(_buffer.guessReadingForPhrase(phrase.UTF8String));
+}
+
 - (BOOL)ariForgetPhrase:(NSString *)phrase {
     return phrase.length > 0 && _buffer.forgetUserPhrase(phrase.UTF8String);
 }

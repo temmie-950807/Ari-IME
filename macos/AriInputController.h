@@ -18,6 +18,10 @@
 // race with it over the same dictionary files.
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)ariUserPhrases;
 - (BOOL)ariAddPhrase:(NSString *)phrase reading:(NSString *)reading;
+// Canonical Bopomofo the engine derives for `phrase`, so the manager window
+// can add a phrase the user typed in Han characters alone. Empty when no
+// reading could be derived for every character.
+- (NSString *)ariGuessReadingForPhrase:(NSString *)phrase;
 - (BOOL)ariForgetPhrase:(NSString *)phrase;
 @end
 

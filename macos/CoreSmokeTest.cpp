@@ -513,6 +513,31 @@ int main(int argc, char **argv) {
         assert(!ari_ime::isCanonicalReadingForTesting("nihao"));
     }
 
+    // A phrase can be taught without its reading being typed: the engine
+    // derives one from the characters. The output has to be a reading the
+    // dictionary format accepts, or the guess could not be stored or exported.
+    {
+        Buffer buffer;
+        const std::string guess = buffer.guessReadingForPhrase("你好");
+        assert(guess == "ㄋㄧˇ ㄏㄠˇ");
+        assert(ari_ime::isCanonicalReadingForTesting(guess));
+
+        // Single character, and a phrase long enough to exercise the join.
+        assert(buffer.guessReadingForPhrase("你") == "ㄋㄧˇ");
+        assert(ari_ime::isCanonicalReadingForTesting(
+            buffer.guessReadingForPhrase("測試")));
+
+        // All-or-nothing: anything without a reading for every character has
+        // to come back empty rather than as a partial mapping nobody can type.
+        assert(buffer.guessReadingForPhrase("").empty());
+        assert(buffer.guessReadingForPhrase("ab").empty());
+        assert(buffer.guessReadingForPhrase("你a").empty());
+        assert(buffer.guessReadingForPhrase("你，").empty());
+
+        // The derived reading is one libchewing accepts back as a mapping.
+        assert(buffer.addUserPhrase("你好", guess));
+    }
+
     std::puts("core smoke test passed");
     return 0;
 }

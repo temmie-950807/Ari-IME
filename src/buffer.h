@@ -170,6 +170,11 @@ public:
     bool addUserPhrase(const std::string &phrase, const std::string &reading) {
         return zhuyin_.addUserPhrase(phrase, reading) >= 0;
     }
+    // Canonical reading for a Han phrase, so the manager can add a phrase
+    // without the reading being typed. Empty when it cannot be derived.
+    std::string guessReadingForPhrase(const std::string &phrase) {
+        return zhuyin_.guessReadingForPhrase(phrase);
+    }
     bool forgetUserPhrase(const std::string &phrase) {
         return zhuyin_.forgetUserPhrase(phrase) > 0;
     }
